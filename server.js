@@ -262,12 +262,12 @@ function isAllowedOrigin(origin) {
 }
 
 function corsHeaders(origin) {
-    const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
+    // TEMPORARY FIX: Allow all origins for debugging
     return {
-        'Access-Control-Allow-Origin':      allowed,
+        'Access-Control-Allow-Origin':      '*',
         'Access-Control-Allow-Headers':     'Content-Type, Authorization',
         'Access-Control-Allow-Methods':     'GET,POST,PATCH,DELETE,OPTIONS',
-        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Credentials': 'false',
         'Vary': 'Origin'
     };
 }
