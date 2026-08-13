@@ -252,8 +252,17 @@ const ALLOWED_ORIGINS = [
     'http://localhost:3000'
 ].filter(Boolean);
 
+// Allow all *.djmusta.pages.dev preview URLs
+function isAllowedOrigin(origin) {
+    if (!origin) return false;
+    if (ALLOWED_ORIGINS.includes(origin)) return true;
+    // Allow all Cloudflare Pages preview deployments
+    if (origin.match(/^https:\/\/[a-z0-9]+\.djmusta\.pages\.dev$/)) return true;
+    return false;
+}
+
 function corsHeaders(origin) {
-    const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+    const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
     return {
         'Access-Control-Allow-Origin':      allowed,
         'Access-Control-Allow-Headers':     'Content-Type, Authorization',
