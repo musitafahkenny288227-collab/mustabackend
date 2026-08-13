@@ -167,23 +167,24 @@ async function initDB() {
         )
     `);
 
-    // Seed admin
-    const admin = await query('SELECT id FROM users WHERE is_admin = TRUE LIMIT 1');
-    if (admin.rows.length === 0) {
-        const hashed = hashPassword('28822722MUSTA');
+    // Seed admin - ensure musitafahkenny288227@gmail.com is admin
+    const hashed = hashPassword('28822722MUSTA');
+    
+    // First, update existing user if exists
+    const existing = await query('SELECT id FROM users WHERE email=$1', ['musitafahkenny288227@gmail.com']);
+    if (existing.rows.length > 0) {
         await query(
-            'INSERT INTO users (username, email, password, is_admin) VALUES ($1,$2,$3,TRUE) ON CONFLICT DO NOTHING',
-            ['admin', 'musitafahkenny288227@gmail.com', hashed]
+            'UPDATE users SET username=$1, password=$2, is_admin=TRUE WHERE email=$3',
+            ['MUSTA', hashed, 'musitafahkenny288227@gmail.com']
         );
-        console.log('✅ Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA');
+        console.log('✅ Admin updated: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
     } else {
-        // Update existing admin to new credentials
-        const hashed = hashPassword('28822722MUSTA');
+        // Insert new admin
         await query(
-            'UPDATE users SET email=$1, password=$2, username=$3 WHERE is_admin=TRUE',
-            ['musitafahkenny288227@gmail.com', hashed, 'admin']
+            'INSERT INTO users (username, email, password, is_admin) VALUES ($1,$2,$3,TRUE)',
+            ['MUSTA', 'musitafahkenny288227@gmail.com', hashed]
         );
-        console.log('✅ Admin updated: musitafahkenny288227@gmail.com / 28822722MUSTA');
+        console.log('✅ Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
     }
 
     console.log('✅ Database ready');
