@@ -176,6 +176,14 @@ async function initDB() {
             ['admin', 'musitafahkenny288227@gmail.com', hashed]
         );
         console.log('✅ Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA');
+    } else {
+        // Update existing admin to new credentials
+        const hashed = hashPassword('28822722MUSTA');
+        await query(
+            'UPDATE users SET email=$1, password=$2, username=$3 WHERE is_admin=TRUE',
+            ['musitafahkenny288227@gmail.com', hashed, 'admin']
+        );
+        console.log('✅ Admin updated: musitafahkenny288227@gmail.com / 28822722MUSTA');
     }
 
     console.log('✅ Database ready');
