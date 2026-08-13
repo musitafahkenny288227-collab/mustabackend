@@ -167,6 +167,43 @@ async function initDB() {
         )
     `);
 
+    // Playlists feature
+    await query(`
+        CREATE TABLE IF NOT EXISTS playlists (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name        TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            cover_url   TEXT,
+            is_public   BOOLEAN DEFAULT TRUE,
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    await query(`
+        CREATE TABLE IF NOT EXISTS playlist_songs (
+            id          SERIAL PRIMARY KEY,
+            playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+            song_id     INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+            position    INTEGER DEFAULT 0,
+            added_at    TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(playlist_id, song_id)
+        )
+    `);
+
+    // Artist profiles
+    await query(`
+        CREATE TABLE IF NOT EXISTS artists (
+            id          SERIAL PRIMARY KEY,
+            name        TEXT UNIQUE NOT NULL,
+            bio         TEXT DEFAULT '',
+            photo_url   TEXT,
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+
+    // Recently played history (already tracking in plays table)
+    // We'll use the existing 'plays' table for history
+
     // Seed admin - ensure musitafahkenny288227@gmail.com is admin
     const hashed = hashPassword('28822722MUSTA');
     
@@ -747,6 +784,149 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const body = await parseJSON(req);
         await query('UPDATE users SET is_admin=$1 WHERE id=$2', [!!body.isAdmin, seg[3]]);
         return J(200, { success:true });
+    }
+
+    // ── PLAYLISTS ────────────────────────────────────────────
+
+    // GET /api/playlists - Get user's playlists
+    if (method === 'GET' && pathname === '/api/playlists') {
+        if (!user) return J(401, { error:'Login required' });
+        const r = await query('SELECT p.*, COUNT(ps.song_id) as song_count FROM playlists p LEFT JOIN playlist_songs ps ON p.id=ps.playlist_id WHERE p.user_id=$1 GROUP BY p.id ORDER BY p.created_at DESC', [user.id]);
+        return J(200, { playlists: r.rows });
+    }
+
+    // POST /api/playlists - Create playlist
+    if (method === 'POST' && pathname === '/api/playlists') {
+        if (!user) return J(401, { error:'Login required' });
+        const { name, description, isPublic } = await parseJSON(req);
+        if (!name || name.trim().length === 0) return J(400, { error:'Playlist name required' });
+        const r = await query('INSERT INTO playlists (user_id,name,description,is_public) VALUES ($1,$2,$3,$4) RETURNING *', [user.id, name.trim(), description||'', !!isPublic]);
+        return J(201, { playlist: r.rows[0] });
+    }
+
+    // GET /api/playlists/:id - Get playlist songs
+    if (method === 'GET' && seg[0]==='playlists' && seg[1] && !isNaN(seg[1]) && !seg[2]) {
+        const r = await query('SELECT p.* FROM playlists p WHERE p.id=$1 AND (p.is_public=TRUE OR p.user_id=$2)', [seg[1], user?.id||null]);
+        if (!r.rows[0]) return J(404, { error:'Playlist not found' });
+        const songs = await query('SELECT s.*, ps.added_at FROM songs s INNER JOIN playlist_songs ps ON s.id=ps.song_id WHERE ps.playlist_id=$1 AND s.approved=TRUE ORDER BY ps.position, ps.added_at', [seg[1]]);
+        return J(200, { playlist: r.rows[0], songs: songs.rows });
+    }
+
+    // POST /api/playlists/:id/songs - Add song to playlist
+    if (method === 'POST' && seg[0]==='playlists' && seg[1] && seg[2]==='songs') {
+        if (!user) return J(401, { error:'Login required' });
+        const { songId } = await parseJSON(req);
+        if (!songId) return J(400, { error:'Song ID required' });
+        const playlist = await query('SELECT id FROM playlists WHERE id=$1 AND user_id=$2', [seg[1], user.id]);
+        if (!playlist.rows[0]) return J(404, { error:'Playlist not found or not yours' });
+        const song = await query('SELECT id FROM songs WHERE id=$1 AND approved=TRUE', [songId]);
+        if (!song.rows[0]) return J(404, { error:'Song not found' });
+        try {
+            await query('INSERT INTO playlist_songs (playlist_id,song_id) VALUES ($1,$2)', [seg[1], songId]);
+            return J(200, { success:true });
+        } catch(e) {
+            if (e.message.includes('duplicate')) return J(409, { error:'Song already in playlist' });
+            throw e;
+        }
+    }
+
+    // DELETE /api/playlists/:id/songs/:songId - Remove song from playlist
+    if (method === 'DELETE' && seg[0]==='playlists' && seg[1] && seg[2]==='songs' && seg[3]) {
+        if (!user) return J(401, { error:'Login required' });
+        const playlist = await query('SELECT id FROM playlists WHERE id=$1 AND user_id=$2', [seg[1], user.id]);
+        if (!playlist.rows[0]) return J(404, { error:'Playlist not found or not yours' });
+        await query('DELETE FROM playlist_songs WHERE playlist_id=$1 AND song_id=$2', [seg[1], seg[3]]);
+        return J(200, { success:true });
+    }
+
+    // DELETE /api/playlists/:id - Delete playlist
+    if (method === 'DELETE' && seg[0]==='playlists' && seg[1] && !seg[2]) {
+        if (!user) return J(401, { error:'Login required' });
+        const playlist = await query('SELECT id FROM playlists WHERE id=$1 AND user_id=$2', [seg[1], user.id]);
+        if (!playlist.rows[0]) return J(404, { error:'Playlist not found or not yours' });
+        await query('DELETE FROM playlists WHERE id=$1', [seg[1]]);
+        return J(200, { success:true });
+    }
+
+    // ── ARTISTS ──────────────────────────────────────────────
+
+    // GET /api/artists - Get all artists
+    if (method === 'GET' && pathname === '/api/artists') {
+        const artists = await query('SELECT DISTINCT artist FROM songs WHERE approved=TRUE ORDER BY artist');
+        return J(200, { artists: artists.rows.map(r => r.artist) });
+    }
+
+    // GET /api/artists/:name - Get artist profile and songs
+    if (method === 'GET' && seg[0]==='artists' && seg[1] && !seg[2]) {
+        const artistName = decodeURIComponent(seg[1]);
+        const profile = await query('SELECT * FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
+        const songs = await query('SELECT * FROM songs WHERE LOWER(artist)=LOWER($1) AND approved=TRUE ORDER BY created_at DESC', [artistName]);
+        return J(200, { 
+            artist: profile.rows[0] || { name: artistName, bio: '', photo_url: null },
+            songs: songs.rows
+        });
+    }
+
+    // PATCH /api/artists/:name - Update artist profile (admin only)
+    if (method === 'PATCH' && seg[0]==='artists' && seg[1] && !seg[2]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const artistName = decodeURIComponent(seg[1]);
+        const { bio, photoUrl } = await parseJSON(req);
+        const existing = await query('SELECT id FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
+        if (existing.rows.length) {
+            await query('UPDATE artists SET bio=$1, photo_url=$2 WHERE LOWER(name)=LOWER($3)', [bio||'', photoUrl||null, artistName]);
+        } else {
+            await query('INSERT INTO artists (name,bio,photo_url) VALUES ($1,$2,$3)', [artistName, bio||'', photoUrl||null]);
+        }
+        return J(200, { success:true });
+    }
+
+    // ── HISTORY & RECOMMENDATIONS ────────────────────────────
+
+    // GET /api/history/recent - Recently played songs
+    if (method === 'GET' && pathname === '/api/history/recent') {
+        if (!user) return J(401, { error:'Login required' });
+        const r = await query(`
+            SELECT DISTINCT ON (s.id) s.*, p.created_at as played_at 
+            FROM songs s 
+            INNER JOIN plays p ON s.id=p.song_id 
+            WHERE p.user_id=$1 AND s.approved=TRUE 
+            ORDER BY s.id, p.created_at DESC 
+            LIMIT 20
+        `, [user.id]);
+        return J(200, { songs: r.rows });
+    }
+
+    // GET /api/recommendations - Recommended songs
+    if (method === 'GET' && pathname === '/api/recommendations') {
+        if (!user) return J(401, { error:'Login required' });
+        // Recommend based on liked songs' genres and artists
+        const r = await query(`
+            SELECT DISTINCT s.* FROM songs s
+            WHERE s.approved=TRUE AND s.id NOT IN (
+                SELECT song_id FROM likes WHERE user_id=$1
+            ) AND (
+                s.genre IN (SELECT DISTINCT genre FROM songs WHERE id IN (SELECT song_id FROM likes WHERE user_id=$1))
+                OR s.artist IN (SELECT DISTINCT artist FROM songs WHERE id IN (SELECT song_id FROM likes WHERE user_id=$1))
+            )
+            ORDER BY s.play_count DESC, s.created_at DESC
+            LIMIT 20
+        `, [user.id]);
+        return J(200, { songs: r.rows });
+    }
+
+    // GET /api/trending - Trending songs (most played in last 7 days)
+    if (method === 'GET' && pathname === '/api/trending') {
+        const r = await query(`
+            SELECT s.*, COUNT(p.id) as recent_plays 
+            FROM songs s 
+            LEFT JOIN plays p ON s.id=p.song_id AND p.created_at > NOW() - INTERVAL '7 days'
+            WHERE s.approved=TRUE
+            GROUP BY s.id
+            ORDER BY recent_plays DESC, s.play_count DESC
+            LIMIT 50
+        `);
+        return J(200, { songs: r.rows });
     }
 
     J(404, { error:'Endpoint not found' });
