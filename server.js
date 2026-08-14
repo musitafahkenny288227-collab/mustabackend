@@ -12,11 +12,6 @@ const path   = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const { Pool } = require('pg');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-
-// Set FFmpeg path
-ffmpeg.setFfmpegPath(ffmpegPath);
 
 // ============================================================
 // CONFIG
@@ -942,7 +937,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     }
 
     // ── GET /api/songs/:id/download-file ─────────────────────
-    // Serves file with clean filename (audio watermark temporarily disabled)
+    // Serves file with clean filename (no timestamp)
     if (method === 'GET' && seg[0]==='songs' && seg[2]==='download-file') {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
         if (!r.rows[0]) return J(404, { error:'Not found' });
@@ -953,13 +948,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         // Clean the title and artist for filename
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
         const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'artist';
-        const cleanFilename = cleanTitle + '_' + cleanArtist + '_(this_song_downloaded_from_www.Djmusta.com).mp3';
+        const cleanFilename = `${cleanTitle}_${cleanArtist}_[this_song_downloaded_from_www.Djmusta.com].mp3`;  // 🔥 Full branding!
         
         // Track download
         await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
         await query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]);
         
-        // Simple proxy download (audio merging disabled for now due to FFmpeg issues on Render)
+        // Proxy download from R2 with clean filename
         return new Promise((resolve) => {
             const client = fileUrl.startsWith('https:') ? https : http;
             client.get(fileUrl, (proxyRes) => {
@@ -972,7 +967,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 res.writeHead(200, {
                     'Content-Type': 'audio/mpeg',
                     'Content-Length': proxyRes.headers['content-length'],
-                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,
+                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,  // 🔥 This forces clean filename!
                     'Cache-Control': 'public,max-age=3600',
                     ...corsHeaders(origin)
                 });
