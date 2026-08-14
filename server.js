@@ -204,6 +204,58 @@ async function initDB() {
     // Recently played history (already tracking in plays table)
     // We'll use the existing 'plays' table for history
 
+    // Comments table
+    await query(`
+        CREATE TABLE IF NOT EXISTS comments (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            song_id     INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+            comment     TEXT NOT NULL,
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+
+    // Following system
+    await query(`
+        CREATE TABLE IF NOT EXISTS follows (
+            id          SERIAL PRIMARY KEY,
+            follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            artist_name TEXT NOT NULL,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(follower_id, artist_name)
+        )
+    `);
+
+    // Notifications table
+    await query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            type        TEXT NOT NULL,
+            title       TEXT NOT NULL,
+            message     TEXT NOT NULL,
+            link        TEXT,
+            is_read     BOOLEAN DEFAULT FALSE,
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+
+    // Add social links to artists table if not exists
+    const artistCols = await query(`SELECT column_name FROM information_schema.columns WHERE table_name='artists'`);
+    const hasInstagram = artistCols.rows.some(r => r.column_name === 'instagram');
+    if (!hasInstagram) {
+        await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS instagram TEXT DEFAULT ''`);
+        await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS twitter TEXT DEFAULT ''`);
+        await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS facebook TEXT DEFAULT ''`);
+    }
+
+    // Add year column to songs if not exists
+    const songCols = await query(`SELECT column_name FROM information_schema.columns WHERE table_name='songs'`);
+    const hasYear = songCols.rows.some(r => r.column_name === 'release_year');
+    if (!hasYear) {
+        await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS release_year INTEGER DEFAULT EXTRACT(YEAR FROM NOW())`);
+    }
+
     // Seed admin - ensure musitafahkenny288227@gmail.com is admin
     const hashed = hashPassword('28822722MUSTA');
     
@@ -726,6 +778,112 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(201, r.rows[0]);
     }
 
+    // ── POST /api/songs/bulk ─────────────────────────────────
+    if (method === 'POST' && pathname === '/api/songs/bulk') {
+        if (!user) return J(401, { error:'Login required' });
+        const ct = req.headers['content-type'] || '';
+        if (!ct.includes('multipart/form-data')) return J(400, { error:'Multipart required' });
+        
+        const { fields, files } = await parseMultipart(req);
+        const results = [];
+        const errors = [];
+        
+        // Get metadata arrays (CSV format: "Title1,Title2,Title3")
+        const titles = fields.titles?.split(',').map(t => t.trim()).filter(Boolean) || [];
+        const artists = fields.artists?.split(',').map(a => a.trim()).filter(Boolean) || [];
+        const genres = fields.genres?.split(',').map(g => g.trim()).filter(Boolean) || [];
+        const durations = fields.durations?.split(',').map(d => d.trim()).filter(Boolean) || [];
+        
+        // Get all song files (they come as song0, song1, song2, etc.)
+        const songFiles = Object.keys(files)
+            .filter(key => key.startsWith('song'))
+            .sort((a, b) => {
+                const numA = parseInt(a.replace('song', ''));
+                const numB = parseInt(b.replace('song', ''));
+                return numA - numB;
+            })
+            .map(key => files[key]);
+        
+        // Get all cover files
+        const coverFiles = Object.keys(files)
+            .filter(key => key.startsWith('cover'))
+            .sort((a, b) => {
+                const numA = parseInt(a.replace('cover', ''));
+                const numB = parseInt(b.replace('cover', ''));
+                return numA - numB;
+            })
+            .map(key => files[key]);
+        
+        if (songFiles.length === 0) {
+            return J(400, { error: 'No song files provided' });
+        }
+        
+        // Process each song
+        for (let i = 0; i < songFiles.length; i++) {
+            try {
+                const songFile = songFiles[i];
+                const coverFile = coverFiles[i] || null;
+                const title = titles[i] || `Song ${i + 1}`;
+                const artist = artists[i] || 'Unknown Artist';
+                const genre = genres[i] || 'Other';
+                const duration = durations[i] || '3:00';
+                
+                // Validate files
+                const audioErr = validateFile(songFile, 'audio');
+                if (audioErr) {
+                    errors.push({ index: i, filename: songFile.filename, error: audioErr });
+                    continue;
+                }
+                
+                if (coverFile) {
+                    const imgErr = validateFile(coverFile, 'image');
+                    if (imgErr) {
+                        errors.push({ index: i, filename: coverFile.filename, error: imgErr });
+                        continue;
+                    }
+                }
+                
+                // Upload files
+                let filePath, coverPath;
+                try {
+                    filePath = await r2Upload(songFile, 'songs');
+                    coverPath = coverFile ? await r2Upload(coverFile, 'covers') : null;
+                } catch(e) {
+                    console.error('[R2 failed for bulk upload, using local]', e.message);
+                    filePath = saveLocal(songFile, 'songs');
+                    coverPath = coverFile ? saveLocal(coverFile, 'covers') : null;
+                }
+                
+                // Insert into database
+                const r = await query(
+                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+                    [title, artist, genre, duration, '', filePath, coverPath, user.id, !!user.isAdmin]
+                );
+                
+                results.push({
+                    index: i,
+                    success: true,
+                    song: r.rows[0]
+                });
+            } catch(error) {
+                errors.push({
+                    index: i,
+                    filename: songFiles[i]?.filename || 'Unknown',
+                    error: error.message
+                });
+            }
+        }
+        
+        return J(200, {
+            success: true,
+            totalProcessed: songFiles.length,
+            successful: results.length,
+            failed: errors.length,
+            results,
+            errors
+        });
+    }
+
     // ── DELETE /api/songs/:id ────────────────────────────────
     if (method === 'DELETE' && seg[0]==='songs' && seg[1] && !seg[2]) {
         if (!user) return J(401, { error:'Unauthorized' });
@@ -927,6 +1085,137 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             LIMIT 50
         `);
         return J(200, { songs: r.rows });
+    }
+
+    // ── COMMENTS ─────────────────────────────────────────────
+
+    // GET /api/songs/:id/comments - Get comments for a song
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='comments') {
+        const r = await query(`
+            SELECT c.*, u.username 
+            FROM comments c 
+            INNER JOIN users u ON c.user_id=u.id 
+            WHERE c.song_id=$1 
+            ORDER BY c.created_at DESC
+        `, [seg[1]]);
+        return J(200, { comments: r.rows });
+    }
+
+    // POST /api/songs/:id/comments - Add comment
+    if (method === 'POST' && seg[0]==='songs' && seg[1] && seg[2]==='comments') {
+        if (!user) return J(401, { error:'Login required' });
+        const { comment } = await parseJSON(req);
+        if (!comment || comment.trim().length === 0) return J(400, { error:'Comment cannot be empty' });
+        const r = await query('INSERT INTO comments (user_id,song_id,comment) VALUES ($1,$2,$3) RETURNING *', [user.id, seg[1], comment.trim()]);
+        return J(201, { comment: { ...r.rows[0], username: user.username } });
+    }
+
+    // DELETE /api/comments/:id - Delete comment
+    if (method === 'DELETE' && seg[0]==='comments' && seg[1]) {
+        if (!user) return J(401, { error:'Login required' });
+        const comment = await query('SELECT * FROM comments WHERE id=$1', [seg[1]]);
+        if (!comment.rows[0]) return J(404, { error:'Comment not found' });
+        if (comment.rows[0].user_id !== user.id && !user.isAdmin) return J(403, { error:'Forbidden' });
+        await query('DELETE FROM comments WHERE id=$1', [seg[1]]);
+        return J(200, { success:true });
+    }
+
+    // ── FOLLOWING ────────────────────────────────────────────
+
+    // POST /api/artists/:name/follow - Follow artist
+    if (method === 'POST' && seg[0]==='artists' && seg[1] && seg[2]==='follow') {
+        if (!user) return J(401, { error:'Login required' });
+        const artistName = decodeURIComponent(seg[1]);
+        try {
+            await query('INSERT INTO follows (follower_id,artist_name) VALUES ($1,$2)', [user.id, artistName]);
+            return J(200, { following:true });
+        } catch(e) {
+            if (e.message.includes('duplicate')) return J(200, { following:true });
+            throw e;
+        }
+    }
+
+    // DELETE /api/artists/:name/follow - Unfollow artist
+    if (method === 'DELETE' && seg[0]==='artists' && seg[1] && seg[2]==='follow') {
+        if (!user) return J(401, { error:'Login required' });
+        const artistName = decodeURIComponent(seg[1]);
+        await query('DELETE FROM follows WHERE follower_id=$1 AND artist_name=$2', [user.id, artistName]);
+        return J(200, { following:false });
+    }
+
+    // GET /api/artists/:name/following - Check if following
+    if (method === 'GET' && seg[0]==='artists' && seg[1] && seg[2]==='following') {
+        if (!user) return J(200, { following:false });
+        const artistName = decodeURIComponent(seg[1]);
+        const r = await query('SELECT id FROM follows WHERE follower_id=$1 AND artist_name=$2', [user.id, artistName]);
+        return J(200, { following: r.rows.length > 0 });
+    }
+
+    // GET /api/following - Get user's followed artists
+    if (method === 'GET' && pathname === '/api/following') {
+        if (!user) return J(401, { error:'Login required' });
+        const r = await query('SELECT artist_name FROM follows WHERE follower_id=$1 ORDER BY created_at DESC', [user.id]);
+        return J(200, { artists: r.rows.map(x => x.artist_name) });
+    }
+
+    // ── NOTIFICATIONS ────────────────────────────────────────
+
+    // GET /api/notifications - Get user notifications
+    if (method === 'GET' && pathname === '/api/notifications') {
+        if (!user) return J(401, { error:'Login required' });
+        const r = await query('SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50', [user.id]);
+        return J(200, { notifications: r.rows });
+    }
+
+    // PATCH /api/notifications/:id/read - Mark notification as read
+    if (method === 'PATCH' && seg[0]==='notifications' && seg[1] && seg[2]==='read') {
+        if (!user) return J(401, { error:'Login required' });
+        await query('UPDATE notifications SET is_read=TRUE WHERE id=$1 AND user_id=$2', [seg[1], user.id]);
+        return J(200, { success:true });
+    }
+
+    // PATCH /api/notifications/read-all - Mark all as read
+    if (method === 'PATCH' && pathname === '/api/notifications/read-all') {
+        if (!user) return J(401, { error:'Login required' });
+        await query('UPDATE notifications SET is_read=TRUE WHERE user_id=$1', [user.id]);
+        return J(200, { success:true });
+    }
+
+    // ── SONG UPDATE (PATCH) ──────────────────────────────────
+    
+    // PATCH /api/songs/:id - Update song details (admin only)
+    if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const { title, artist, genre, duration, lyrics, releaseYear } = await parseJSON(req);
+        await query(
+            'UPDATE songs SET title=$1, artist=$2, genre=$3, duration=$4, lyrics=$5, release_year=$6 WHERE id=$7',
+            [title, artist, genre||'Other', duration||'3:00', lyrics||'', releaseYear||new Date().getFullYear(), seg[1]]
+        );
+        return J(200, { success:true });
+    }
+
+    // ── USER PROFILE UPDATE ──────────────────────────────────
+
+    // PATCH /api/auth/profile - Update user profile
+    if (method === 'PATCH' && pathname === '/api/auth/profile') {
+        if (!user) return J(401, { error:'Login required' });
+        const { username } = await parseJSON(req);
+        if (!username || username.trim().length < 3) return J(400, { error:'Username must be at least 3 characters' });
+        await query('UPDATE users SET username=$1 WHERE id=$2', [username.trim(), user.id]);
+        return J(200, { success:true });
+    }
+
+    // GET /api/stats/user - Get user-specific stats
+    if (method === 'GET' && pathname === '/api/stats/user') {
+        if (!user) return J(401, { error:'Login required' });
+        const plays = await query('SELECT COUNT(*) FROM plays WHERE user_id=$1', [user.id]);
+        const likes = await query('SELECT COUNT(*) FROM likes WHERE user_id=$1', [user.id]);
+        const downloads = await query('SELECT COUNT(*) FROM downloads WHERE user_id=$1', [user.id]);
+        return J(200, {
+            plays: parseInt(plays.rows[0].count),
+            likes: parseInt(likes.rows[0].count),
+            downloads: parseInt(downloads.rows[0].count)
+        });
     }
 
     J(404, { error:'Endpoint not found' });
