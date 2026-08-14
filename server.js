@@ -936,6 +936,45 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
+    // ── GET /api/songs/:id/download-file ─────────────────────
+    // Serves file with clean filename (no timestamp)
+    if (method === 'GET' && seg[0]==='songs' && seg[2]==='download-file') {
+        const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
+        if (!r.rows[0]) return J(404, { error:'Not found' });
+        
+        const song = r.rows[0];
+        const filePath = path.join(__dirname, song.file_path);
+        
+        // Clean the title for filename
+        const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
+        const cleanFilename = cleanTitle + '.mp3';
+        
+        // Track download
+        await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
+        await query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]);
+        
+        // Serve file with clean filename
+        return new Promise((resolve) => {
+            fs.stat(filePath, (err, stat) => {
+                if (err || !stat.isFile()) {
+                    res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
+                    res.end(JSON.stringify({ error: 'File not found' }));
+                    return resolve();
+                }
+                
+                res.writeHead(200, {
+                    'Content-Type': 'audio/mpeg',
+                    'Content-Length': stat.size,
+                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,  // 🔥 This forces clean filename!
+                    'Cache-Control': 'public,max-age=3600',
+                    ...corsHeaders(origin)
+                });
+                fs.createReadStream(filePath).pipe(res);
+                resolve();
+            });
+        });
+    }
+
     // ── PATCH /api/songs/admin/users/:id/admin ───────────────
     if (method === 'PATCH' && seg[0]==='songs' && seg[1]==='admin' && seg[2]==='users' && seg[4]==='admin') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
