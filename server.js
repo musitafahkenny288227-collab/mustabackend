@@ -947,7 +947,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         
         // Clean the title for filename
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
-        const cleanFilename = cleanTitle + '.mp3';
+        const cleanFilename = cleanTitle + '_Djmusta.com.mp3';  // 🔥 Added Djmusta.com branding!
         
         // Track download
         await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
