@@ -12,6 +12,11 @@ const path   = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const { Pool } = require('pg');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+
+// Set FFmpeg path
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 // ============================================================
 // CONFIG
@@ -937,7 +942,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     }
 
     // ── GET /api/songs/:id/download-file ─────────────────────
-    // Serves file with clean filename (no timestamp)
+    // Serves file with clean filename and audio tag appended
     if (method === 'GET' && seg[0]==='songs' && seg[2]==='download-file') {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
         if (!r.rows[0]) return J(404, { error:'Not found' });
@@ -948,15 +953,57 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         // Clean the title and artist for filename
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
         const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'artist';
-        const cleanFilename = cleanTitle + '_' + cleanArtist + '_(this_song_downloaded_from_www.Djmusta.com).mp3';  // 🔥 Full branding!
+        const cleanFilename = cleanTitle + '_' + cleanArtist + '_(this_song_downloaded_from_www.Djmusta.com).mp3';
         
         // Track download
         await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
         await query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]);
         
-        // Proxy download from R2 with clean filename
+        // Path to audio tag
+        const audioTagPath = path.join(__dirname, 'audio-tag.mp3');
+        const audioTagExists = fs.existsSync(audioTagPath);
+        
+        // If no audio tag, just proxy normally
+        if (!audioTagExists) {
+            return new Promise((resolve) => {
+                const client = fileUrl.startsWith('https:') ? https : http;
+                client.get(fileUrl, (proxyRes) => {
+                    if (proxyRes.statusCode !== 200) {
+                        res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
+                        res.end(JSON.stringify({ error: 'File not found' }));
+                        return resolve();
+                    }
+                    res.writeHead(200, {
+                        'Content-Type': 'audio/mpeg',
+                        'Content-Length': proxyRes.headers['content-length'],
+                        'Content-Disposition': `attachment; filename="${cleanFilename}"`,
+                        'Cache-Control': 'public,max-age=3600',
+                        ...corsHeaders(origin)
+                    });
+                    proxyRes.pipe(res);
+                    proxyRes.on('end', resolve);
+                }).on('error', (err) => {
+                    console.error('[Download proxy error]', err);
+                    res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
+                    res.end(JSON.stringify({ error: 'Download failed' }));
+                    resolve();
+                });
+            });
+        }
+        
+        // Merge audio with tag
         return new Promise((resolve) => {
+            const tempDir = path.join(__dirname, 'temp');
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+            
+            const tempOriginal = path.join(tempDir, `original_${Date.now()}.mp3`);
+            const tempOutput = path.join(tempDir, `output_${Date.now()}.mp3`);
+            const tempList = path.join(tempDir, `list_${Date.now()}.txt`);
+            
+            // Download original file
             const client = fileUrl.startsWith('https:') ? https : http;
+            const fileStream = fs.createWriteStream(tempOriginal);
+            
             client.get(fileUrl, (proxyRes) => {
                 if (proxyRes.statusCode !== 200) {
                     res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
@@ -964,17 +1011,66 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                     return resolve();
                 }
                 
-                res.writeHead(200, {
-                    'Content-Type': 'audio/mpeg',
-                    'Content-Length': proxyRes.headers['content-length'],
-                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,  // 🔥 This forces clean filename!
-                    'Cache-Control': 'public,max-age=3600',
-                    ...corsHeaders(origin)
+                proxyRes.pipe(fileStream);
+                
+                fileStream.on('finish', () => {
+                    fileStream.close();
+                    
+                    // Create concat list for ffmpeg
+                    const listContent = `file '${tempOriginal.replace(/\\/g, '/')}'\nfile '${audioTagPath.replace(/\\/g, '/')}'`;
+                    fs.writeFileSync(tempList, listContent);
+                    
+                    // Merge using ffmpeg
+                    ffmpeg()
+                        .input(tempList)
+                        .inputOptions(['-f', 'concat', '-safe', '0'])
+                        .audioCodec('libmp3lame')
+                        .audioBitrate('192k')
+                        .on('end', () => {
+                            // Send merged file
+                            fs.stat(tempOutput, (err, stat) => {
+                                if (err) {
+                                    console.error('[Merge error]', err);
+                                    res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
+                                    res.end(JSON.stringify({ error: 'Processing failed' }));
+                                    // Cleanup
+                                    [tempOriginal, tempOutput, tempList].forEach(f => fs.existsSync(f) && fs.unlinkSync(f));
+                                    return resolve();
+                                }
+                                
+                                res.writeHead(200, {
+                                    'Content-Type': 'audio/mpeg',
+                                    'Content-Length': stat.size,
+                                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,
+                                    'Cache-Control': 'public,max-age=3600',
+                                    ...corsHeaders(origin)
+                                });
+                                
+                                const readStream = fs.createReadStream(tempOutput);
+                                readStream.pipe(res);
+                                readStream.on('end', () => {
+                                    // Cleanup temp files
+                                    setTimeout(() => {
+                                        [tempOriginal, tempOutput, tempList].forEach(f => {
+                                            try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch(e) {}
+                                        });
+                                    }, 1000);
+                                    resolve();
+                                });
+                            });
+                        })
+                        .on('error', (err) => {
+                            console.error('[FFmpeg error]', err);
+                            res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
+                            res.end(JSON.stringify({ error: 'Processing failed' }));
+                            // Cleanup
+                            [tempOriginal, tempOutput, tempList].forEach(f => fs.existsSync(f) && fs.unlinkSync(f));
+                            resolve();
+                        })
+                        .save(tempOutput);
                 });
-                proxyRes.pipe(res);
-                proxyRes.on('end', resolve);
             }).on('error', (err) => {
-                console.error('[Download proxy error]', err);
+                console.error('[Download error]', err);
                 res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
                 res.end(JSON.stringify({ error: 'Download failed' }));
                 resolve();
