@@ -945,9 +945,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const song = r.rows[0];
         const fileUrl = song.file_path;
         
-        // Clean the title for filename
+        // Clean the title and artist for filename
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
-        const cleanFilename = cleanTitle + '_Djmusta.com.mp3';  // 🔥 Added Djmusta.com branding!
+        const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'artist';
+        const cleanFilename = cleanTitle + '_' + cleanArtist + '_(this_song_downloaded_from_www.Djmusta.com).mp3';  // 🔥 Full branding!
         
         // Track download
         await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
