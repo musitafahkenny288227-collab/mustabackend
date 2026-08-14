@@ -943,7 +943,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (!r.rows[0]) return J(404, { error:'Not found' });
         
         const song = r.rows[0];
-        const filePath = path.join(__dirname, song.file_path);
+        const fileUrl = song.file_path;
         
         // Clean the title for filename
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
@@ -953,10 +953,11 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
         await query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]);
         
-        // Serve file with clean filename
+        // Proxy download from R2 with clean filename
         return new Promise((resolve) => {
-            fs.stat(filePath, (err, stat) => {
-                if (err || !stat.isFile()) {
+            const client = fileUrl.startsWith('https:') ? https : http;
+            client.get(fileUrl, (proxyRes) => {
+                if (proxyRes.statusCode !== 200) {
                     res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
                     res.end(JSON.stringify({ error: 'File not found' }));
                     return resolve();
@@ -964,12 +965,17 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 
                 res.writeHead(200, {
                     'Content-Type': 'audio/mpeg',
-                    'Content-Length': stat.size,
+                    'Content-Length': proxyRes.headers['content-length'],
                     'Content-Disposition': `attachment; filename="${cleanFilename}"`,  // 🔥 This forces clean filename!
                     'Cache-Control': 'public,max-age=3600',
                     ...corsHeaders(origin)
                 });
-                fs.createReadStream(filePath).pipe(res);
+                proxyRes.pipe(res);
+                proxyRes.on('end', resolve);
+            }).on('error', (err) => {
+                console.error('[Download proxy error]', err);
+                res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders(origin) });
+                res.end(JSON.stringify({ error: 'Download failed' }));
                 resolve();
             });
         });
