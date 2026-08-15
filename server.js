@@ -30,6 +30,11 @@ const R2_ENDPOINT   = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 const UPLOADS = path.join(__dirname, 'uploads');
 
+// ============================================================
+// SITEMAP UPDATER
+// ============================================================
+const { updateSitemap, pingSearchEngines } = require('./update-sitemap.js');
+
 // Warn if using default JWT secret in production
 if (JWT_SECRET === 'djmusta_secret_2026' && process.env.NODE_ENV === 'production') {
     console.warn('⚠️  WARNING: Using default JWT_SECRET in production. Set JWT_SECRET env var!');
@@ -897,6 +902,19 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='approve') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         await query('UPDATE songs SET approved=TRUE WHERE id=$1', [seg[1]]);
+        
+        // ✨ AUTO-UPDATE SITEMAP
+        try {
+            const songData = await query('SELECT id, title, artist FROM songs WHERE id=$1', [seg[1]]);
+            if (songData.rows[0]) {
+                updateSitemap(songData.rows[0]);
+                // Ping search engines in background (don't wait)
+                pingSearchEngines().catch(err => console.log('Ping failed:', err.message));
+            }
+        } catch (err) {
+            console.error('Sitemap update failed:', err.message);
+        }
+        
         return J(200, { success:true });
     }
 
