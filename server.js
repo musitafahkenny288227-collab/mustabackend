@@ -1306,3 +1306,221 @@ initDB().then(() => {
     console.error('Failed to connect to database:', e.message);
     process.exit(1);
 });
+
+
+// ============================================================
+// MOBILE MONEY PAYMENT ROUTES
+// ============================================================
+
+const mobileMoneyService = require('./mobile-money');
+
+// Get available mobile money networks
+app.get('/api/payments/networks', (req, res) => {
+  const networks = mobileMoneyService.getAvailableNetworks();
+  res.json({ success: true, networks });
+});
+
+// Initiate mobile money payment
+app.post('/api/payments/mobile-money/initiate', authenticate, async (req, res) => {
+  try {
+    const { amount, phone, network, paymentType, metadata } = req.body;
+
+    // Validate inputs
+    if (!amount || !phone || !network) {
+      return res.status(400).json({
+        success: false,
+        error: 'Amount, phone, and network are required'
+      });
+    }
+
+    if (amount < 500) {
+      return res.status(400).json({
+        success: false,
+        error: 'Minimum payment amount is 500 UGX'
+      });
+    }
+
+    // Initiate payment
+    const result = await mobileMoneyService.initiateMobileMoneyPayment({
+      amount,
+      phone,
+      network,
+      email: req.user.email,
+      fullname: req.user.name || 'DJ Musta User',
+      paymentType,
+      metadata: {
+        ...metadata,
+        userId: req.user.id,
+        username: req.user.username
+      }
+    });
+
+    // Store payment in database
+    await pool.query(
+      `INSERT INTO payments (user_id, amount, currency, reference, payment_type, status, network, phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [req.user.id, amount, 'UGX', result.reference, paymentType, 'pending', network, phone]
+    );
+
+    res.json({
+      success: true,
+      message: result.message,
+      reference: result.reference,
+      instructions: `Please approve the payment on your ${network.toUpperCase()} phone`
+    });
+  } catch (error) {
+    console.error('Payment Initiation Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to initiate payment'
+    });
+  }
+});
+
+// Verify payment status
+app.get('/api/payments/verify/:transactionId', authenticate, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+
+    const result = await mobileMoneyService.verifyPayment(transactionId);
+
+    if (result.success) {
+      // Update payment status in database
+      await pool.query(
+        `UPDATE payments SET status = $1, paid_at = NOW()
+         WHERE reference = $2`,
+        ['completed', result.reference]
+      );
+
+      // Process payment based on type
+      if (result.paymentType === 'PREMIUM_MONTHLY') {
+        await activatePremium(result.customerEmail, 30);
+      } else if (result.paymentType === 'PREMIUM_YEARLY') {
+        await activatePremium(result.customerEmail, 365);
+      } else if (result.paymentType?.startsWith('ARTIST_TIP')) {
+        await processArtistTip(result);
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Verification Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify payment'
+    });
+  }
+});
+
+// Flutterwave webhook endpoint
+app.post('/api/payments/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['verif-hash'];
+
+    // Verify webhook signature
+    if (!mobileMoneyService.verifyWebhookSignature(signature, req.body)) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const result = await mobileMoneyService.processWebhook(req.body);
+
+    if (result.success) {
+      // Update payment in database
+      await pool.query(
+        `UPDATE payments SET status = $1, paid_at = NOW()
+         WHERE reference = $2`,
+        ['completed', result.reference]
+      );
+
+      // Process payment based on type
+      if (result.paymentType === 'PREMIUM_MONTHLY') {
+        await activatePremium(result.email, 30);
+      } else if (result.paymentType === 'PREMIUM_YEARLY') {
+        await activatePremium(result.email, 365);
+      } else if (result.paymentType?.startsWith('ARTIST_TIP')) {
+        await processArtistTip(result);
+      } else if (result.paymentType === 'FEATURED_SONG') {
+        await activateFeaturedSong(result.metadata.songId, 7);
+      }
+
+      // Send success notification
+      await sendPaymentNotification(result.email, result);
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Webhook Error:', error);
+    res.sendStatus(500);
+  }
+});
+
+// Get user's payment history
+app.get('/api/payments/history', authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, amount, currency, payment_type, status, network, phone, 
+              reference, created_at, paid_at
+       FROM payments
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+
+    res.json({
+      success: true,
+      payments: result.rows
+    });
+  } catch (error) {
+    console.error('Payment History Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payment history'
+    });
+  }
+});
+
+// Helper: Activate premium subscription
+async function activatePremium(email, days) {
+  await pool.query(
+    `UPDATE users 
+     SET is_premium = true, 
+         premium_until = NOW() + INTERVAL '${days} days'
+     WHERE email = $1`,
+    [email]
+  );
+  console.log(`✓ Premium activated for ${email} (${days} days)`);
+}
+
+// Helper: Process artist tip
+async function processArtistTip(payment) {
+  const { metadata, amount } = payment;
+  
+  if (metadata.artistId) {
+    await pool.query(
+      `INSERT INTO artist_tips (artist_id, user_id, amount, payment_reference)
+       VALUES ($1, $2, $3, $4)`,
+      [metadata.artistId, metadata.userId, amount, payment.reference]
+    );
+    console.log(`✓ Tip of ${amount} UGX sent to artist ${metadata.artistId}`);
+  }
+}
+
+// Helper: Activate featured song
+async function activateFeaturedSong(songId, days) {
+  await pool.query(
+    `UPDATE songs 
+     SET is_featured = true,
+         featured_until = NOW() + INTERVAL '${days} days'
+     WHERE id = $1`,
+    [songId]
+  );
+  console.log(`✓ Song ${songId} featured for ${days} days`);
+}
+
+// Helper: Send payment notification
+async function sendPaymentNotification(email, payment) {
+  // Send email notification
+  console.log(`✓ Payment notification sent to ${email}`);
+  // TODO: Implement email service
+}
