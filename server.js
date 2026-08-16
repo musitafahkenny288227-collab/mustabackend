@@ -149,7 +149,10 @@ function validateFile(fileObj, type) {
 // ============================================================
 const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 5
 });
 
 async function query(sql, params = []) {
@@ -161,6 +164,11 @@ async function query(sql, params = []) {
         client.release();
     }
 }
+
+// Keep Neon DB alive - ping every 4 minutes
+setInterval(async () => {
+    try { await query('SELECT 1'); } catch(e) { console.log('[DB Keep-alive] ping failed:', e.message); }
+}, 4 * 60 * 1000);
 
 // ============================================================
 // INIT DATABASE TABLES
