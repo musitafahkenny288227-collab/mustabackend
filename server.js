@@ -35,6 +35,33 @@ const UPLOADS = path.join(__dirname, 'uploads');
 // ============================================================
 const { updateSitemap, pingSearchEngines } = require('./update-sitemap.js');
 
+// ============================================================
+// DATABASE SETUP - Verification Requests Table
+// ============================================================
+async function setupVerificationTable() {
+    try {
+        await query(`
+            CREATE TABLE IF NOT EXISTS verification_requests (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                artist_name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                social_links TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                submitted_at TIMESTAMP DEFAULT NOW(),
+                reviewed_at TIMESTAMP,
+                reviewed_by INTEGER REFERENCES users(id),
+                admin_notes TEXT
+            )
+        `);
+        console.log('✅ Verification requests table ready');
+    } catch (err) {
+        console.error('⚠️ Verification table setup error:', err.message);
+    }
+}
+setupVerificationTable();
+
 // Warn if using default JWT secret in production
 if (JWT_SECRET === 'djmusta_secret_2026' && process.env.NODE_ENV === 'production') {
     console.warn('⚠️  WARNING: Using default JWT_SECRET in production. Set JWT_SECRET env var!');
@@ -1524,3 +1551,158 @@ async function sendPaymentNotification(email, payment) {
   console.log(`✓ Payment notification sent to ${email}`);
   // TODO: Implement email service
 }
+
+
+// ============================================================
+// ARTIST VERIFICATION ENDPOINTS
+// ============================================================
+
+// Submit verification request
+app.post('/api/verification/request', authenticate, async (req, res) => {
+  try {
+    const user = req.user;
+    const { artist_name, phone, social_links, reason } = req.body;
+
+    if (!artist_name || !phone || !social_links || !reason) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Check if user already has a pending request
+    const existing = await query(
+      'SELECT * FROM verification_requests WHERE user_id = $1 AND status = $2',
+      [user.id, 'pending']
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'You already have a pending verification request' 
+      });
+    }
+
+    // Insert verification request
+    const result = await query(
+      `INSERT INTO verification_requests 
+       (user_id, artist_name, phone, social_links, reason) 
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING *`,
+      [user.id, artist_name, phone, social_links, reason]
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Verification request submitted successfully',
+      request: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Verification request error:', error);
+    res.status(500).json({ error: 'Failed to submit verification request' });
+  }
+});
+
+// Get all verification requests (ADMIN ONLY)
+app.get('/api/verification/requests', authenticate, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user is admin
+    const userCheck = await query('SELECT is_admin FROM users WHERE id = $1', [user.id]);
+    if (!userCheck.rows[0]?.is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const status = req.query.status || 'pending';
+    const result = await query(
+      `SELECT v.*, u.username, u.email 
+       FROM verification_requests v 
+       JOIN users u ON v.user_id = u.id 
+       WHERE v.status = $1 
+       ORDER BY v.submitted_at DESC`,
+      [status]
+    );
+
+    res.json({ requests: result.rows });
+  } catch (error) {
+    console.error('Get verification requests error:', error);
+    res.status(500).json({ error: 'Failed to fetch verification requests' });
+  }
+});
+
+// Approve/Reject verification request (ADMIN ONLY)
+app.post('/api/verification/review/:id', authenticate, async (req, res) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    const { action, notes } = req.body; // action: 'approve' or 'reject'
+
+    // Check if user is admin
+    const userCheck = await query('SELECT is_admin FROM users WHERE id = $1', [user.id]);
+    if (!userCheck.rows[0]?.is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    if (action !== 'approve' && action !== 'reject') {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    // Get verification request
+    const request = await query(
+      'SELECT * FROM verification_requests WHERE id = $1',
+      [id]
+    );
+
+    if (request.rows.length === 0) {
+      return res.status(404).json({ error: 'Verification request not found' });
+    }
+
+    const verifyRequest = request.rows[0];
+
+    // Update verification request status
+    await query(
+      `UPDATE verification_requests 
+       SET status = $1, reviewed_at = NOW(), reviewed_by = $2, admin_notes = $3 
+       WHERE id = $4`,
+      [action === 'approve' ? 'approved' : 'rejected', user.id, notes || '', id]
+    );
+
+    // If approved, update user's verified status
+    if (action === 'approve') {
+      await query(
+        'UPDATE users SET is_verified = TRUE WHERE id = $1',
+        [verifyRequest.user_id]
+      );
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Verification request ${action}d successfully` 
+    });
+  } catch (error) {
+    console.error('Review verification error:', error);
+    res.status(500).json({ error: 'Failed to review verification request' });
+  }
+});
+
+// Get user's verification status
+app.get('/api/verification/status', authenticate, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    const result = await query(
+      `SELECT status, submitted_at, reviewed_at, admin_notes 
+       FROM verification_requests 
+       WHERE user_id = $1 
+       ORDER BY submitted_at DESC 
+       LIMIT 1`,
+      [user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ status: 'none' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get verification status error:', error);
+    res.status(500).json({ error: 'Failed to fetch verification status' });
+  }
+});
