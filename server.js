@@ -677,6 +677,32 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true, message:'Password changed successfully' });
     }
 
+
+    // POST /api/auth/google - Google OAuth Login/Register
+    if (method === 'POST' && pathname === '/api/auth/google') {
+        const body = await parseJSON(req);
+        const email = body.email;
+        const username = body.username;
+        if (!email) return J(400, { error:'Email required' });
+        
+        let existingUser = await query('SELECT * FROM users WHERE email=$1', [email]);
+        
+        if (existingUser.rows.length) {
+            const u = existingUser.rows[0];
+            const tkn = jwt.sign({ id:u.id, email:u.email }, JWT_SECRET, { expiresIn:'30d' });
+            return J(200, { token:tkn, user:pub(u) });
+        } else {
+            const randomPass = crypto.randomBytes(16).toString('hex');
+            const hash = hashPassword(randomPass);
+            const r = await query(
+                'INSERT INTO users (username,email,password) VALUES ($1,$2,$3) RETURNING *',
+                [username || email.split('@')[0], email, hash]
+            );
+            const u = r.rows[0];
+            const tkn = jwt.sign({ id:u.id, email:u.email }, JWT_SECRET, { expiresIn:'30d' });
+            return J(201, { token:tkn, user:pub(u) });
+        }
+    }
     // â”€â”€ GET /api/stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/stats') {
         const songs     = await query('SELECT COUNT(*) FROM songs WHERE approved=TRUE');
@@ -1460,3 +1486,4 @@ initDB().then(() => {
     console.error('Failed to connect to database:', e.message);
     process.exit(1);
 });
+
