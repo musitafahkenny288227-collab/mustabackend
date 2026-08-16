@@ -780,14 +780,58 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     // POST /api/auth/google - Google OAuth Login/Register
     if (method === 'POST' && pathname === '/api/auth/google') {
         const body = await parseJSON(req);
-        const email = body.email;
-        const username = body.username;
+        const idToken = body.idToken;
         const photoUrl = body.photoUrl || null;
-        if (!email) return J(400, { error:'Email required' });
+
+        if (!idToken) return J(400, { error:'ID token required' });
+
+        // Verify the Firebase ID token with Google
+        let email, username, googleUid;
+        try {
+            // Fetch Google public keys
+            const keysRes = await new Promise((resolve, reject) => {
+                https.get('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com', res => {
+                    let data = '';
+                    res.on('data', c => data += c);
+                    res.on('end', () => resolve(JSON.parse(data)));
+                }).on('error', reject);
+            });
+
+            // Decode token header to get kid
+            const parts = idToken.split('.');
+            if (parts.length !== 3) throw new Error('Invalid token format');
+            const header = JSON.parse(Buffer.from(parts[0], 'base64').toString());
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+
+            // Validate claims
+            const now = Math.floor(Date.now() / 1000);
+            if (payload.exp < now) throw new Error('Token expired');
+            if (payload.aud !== 'dj-musta-music') throw new Error('Invalid audience');
+            if (payload.iss !== 'https://securetoken.google.com/dj-musta-music') throw new Error('Invalid issuer');
+            if (!payload.email_verified) throw new Error('Email not verified with Google');
+
+            // Verify signature using the correct public key
+            const certPem = keysRes[header.kid];
+            if (!certPem) throw new Error('Unknown key ID');
+
+            const verifier = crypto.createVerify('SHA256');
+            verifier.update(parts[0] + '.' + parts[1]);
+            const valid = verifier.verify(certPem, parts[2].replace(/-/g,'+').replace(/_/g,'/'), 'base64');
+            if (!valid) throw new Error('Invalid token signature');
+
+            email = payload.email;
+            username = payload.name || payload.email.split('@')[0];
+            googleUid = payload.sub;
+
+        } catch(e) {
+            console.error('[Google Auth] Token verification failed:', e.message);
+            return J(401, { error: 'Invalid Google token: ' + e.message });
+        }
+
+        // Token is valid - login or register
         let existingUser = await query('SELECT * FROM users WHERE email=$1', [email]);
         if (existingUser.rows.length) {
             const u = existingUser.rows[0];
-            // Update photo if provided and not already set
             if (photoUrl && !u.profile_photo) {
                 await query('UPDATE users SET profile_photo=$1 WHERE id=$2', [photoUrl, u.id]);
                 u.profile_photo = photoUrl;
@@ -798,7 +842,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             const randomPass = crypto.randomBytes(16).toString('hex');
             const r = await query(
                 'INSERT INTO users (username,email,password,is_verified,profile_photo) VALUES ($1,$2,$3,TRUE,$4) RETURNING *',
-                [username || email.split('@')[0], email, hashPassword(randomPass), photoUrl]
+                [username, email, hashPassword(randomPass), photoUrl]
             );
             const u = r.rows[0];
             const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:false });
