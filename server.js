@@ -1360,6 +1360,48 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
+    // POST /api/auth/profile/photo - Upload profile photo
+    if (method === 'POST' && pathname === '/api/auth/profile/photo') {
+        if (!user) return J(401, { error:'Login required' });
+        
+        const boundary = req.headers['content-type']?.split('boundary=')[1];
+        if (!boundary) return J(400, { error:'No boundary in multipart request' });
+        
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
+        
+        const parts = buffer.toString('binary').split('--' + boundary);
+        let photoBuffer, photoName, photoType;
+        
+        for (const part of parts) {
+            if (part.includes('filename=')) {
+                const nameMatch = part.match(/filename="(.+?)"/);
+                if (nameMatch) photoName = nameMatch[1];
+                const typeMatch = part.match(/Content-Type: (.+?)\r\n/);
+                if (typeMatch) photoType = typeMatch[1];
+                const dataStart = part.indexOf('\r\n\r\n') + 4;
+                const dataEnd = part.lastIndexOf('\r\n');
+                if (dataStart > 3 && dataEnd > dataStart) {
+                    photoBuffer = Buffer.from(part.slice(dataStart, dataEnd), 'binary');
+                }
+            }
+        }
+        
+        if (!photoBuffer) return J(400, { error:'No photo uploaded' });
+        
+        const ext = photoName.split('.').pop() || 'jpg';
+        const filename = Date.now() + '-profile.' + ext;
+        const filepath = path.join(__dirname, 'uploads', 'profiles', filename);
+        
+        fs.mkdirSync(path.join(__dirname, 'uploads', 'profiles'), { recursive:true });
+        fs.writeFileSync(filepath, photoBuffer);
+        
+        await query('UPDATE users SET profile_photo=$1 WHERE id=$2', ['/uploads/profiles/'+filename, user.id]);
+        
+        return J(200, { success:true, photoUrl:'/uploads/profiles/'+filename });
+    }
+
     // GET /api/stats/user - Get user-specific stats
     if (method === 'GET' && pathname === '/api/stats/user') {
         if (!user) return J(401, { error:'Login required' });
@@ -1526,4 +1568,5 @@ initDB().then(() => {
     console.error('Failed to connect to database:', e.message);
     process.exit(1);
 });
+
 
