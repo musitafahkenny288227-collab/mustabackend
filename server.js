@@ -774,6 +774,16 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { ...song, play_count: song.play_count + 1 });
     }
 
+    // POST /api/songs/:id/play - Track play (for frontend player)
+    if (method === 'POST' && seg[0]==='songs' && seg[1] && seg[2]==='play' && !seg[3]) {
+        const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
+        if (!r.rows[0]) return J(404, { error:'Song not found' });
+        const song = r.rows[0];
+        await query('UPDATE songs SET play_count=play_count+1 WHERE id=$1', [song.id]);
+        await query('INSERT INTO plays (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, song.id, ip]);
+        return J(200, { success: true, play_count: song.play_count + 1 });
+    }
+
     // â”€â”€ POST /api/songs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && pathname === '/api/songs') {
         if (!user) return J(401, { error:'Login required' });
