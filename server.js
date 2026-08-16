@@ -781,17 +781,23 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const body = await parseJSON(req);
         const email = body.email;
         const username = body.username;
+        const photoUrl = body.photoUrl || null;
         if (!email) return J(400, { error:'Email required' });
         let existingUser = await query('SELECT * FROM users WHERE email=$1', [email]);
         if (existingUser.rows.length) {
             const u = existingUser.rows[0];
+            // Update photo if provided and not already set
+            if (photoUrl && !u.profile_photo) {
+                await query('UPDATE users SET profile_photo=$1 WHERE id=$2', [photoUrl, u.id]);
+                u.profile_photo = photoUrl;
+            }
             const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:!!u.is_admin });
             return J(200, { token:tkn, user:pub(u) });
         } else {
             const randomPass = crypto.randomBytes(16).toString('hex');
             const r = await query(
-                'INSERT INTO users (username,email,password,is_verified) VALUES ($1,$2,$3,TRUE) RETURNING *',
-                [username || email.split('@')[0], email, hashPassword(randomPass)]
+                'INSERT INTO users (username,email,password,is_verified,profile_photo) VALUES ($1,$2,$3,TRUE,$4) RETURNING *',
+                [username || email.split('@')[0], email, hashPassword(randomPass), photoUrl]
             );
             const u = r.rows[0];
             const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:false });
@@ -1724,6 +1730,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     }
 
     // ── PREMIUM MANAGEMENT ───────────────────────────────────────────
+
+    // DELETE /api/admin/users/:id - Delete a user (admin only)
+    if (method === 'DELETE' && seg[0]==='admin' && seg[1]==='users' && seg[2]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        if (seg[2] == user.id) return J(400, { error:'Cannot delete yourself' });
+        await query('DELETE FROM users WHERE id=$1 AND is_admin=FALSE', [seg[2]]);
+        return J(200, { success:true });
+    }
 
     // GET /api/admin/premium - List all premium users (admin)
     if (method === 'GET' && pathname === '/api/admin/premium') {
