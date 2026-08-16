@@ -12,28 +12,48 @@ const path   = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const { Pool } = require('pg');
-const nodemailer = require('nodemailer');
 
 // ============================================================
-// EMAIL SETUP (Gmail - use App Password)
+// EMAIL SETUP (Brevo / Sendinblue)
 // ============================================================
 const EMAIL_USER = process.env.EMAIL_USER || 'musitafahkenny288227@gmail.com';
-const EMAIL_PASS = process.env.EMAIL_PASS || '';  // Set this in Render env vars
-const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.pages.dev';
-
-const mailer = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: EMAIL_USER, pass: EMAIL_PASS }
-});
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.com';
 
 async function sendEmail(to, subject, html) {
-    if (!EMAIL_PASS) { console.log('[Email] No EMAIL_PASS set, skipping send to:', to, '| Subject:', subject); return; }
-    try {
-        await mailer.sendMail({ from: `"DJ Musta Music" <${EMAIL_USER}>`, to, subject, html });
-        console.log('[Email] Sent to:', to, '| Subject:', subject);
-    } catch(e) {
-        console.error('[Email] Failed:', e.message);
-    }
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            sender: { name: 'DJ Musta Music', email: EMAIL_USER },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html
+        });
+        const req = https.request({
+            hostname: 'api.brevo.com',
+            path: '/v3/smtp/email',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': BREVO_API_KEY,
+                'Content-Length': Buffer.byteLength(body)
+            }
+        }, res => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log('[Email] Sent to:', to, '| Subject:', subject);
+                    resolve();
+                } else {
+                    console.error('[Email] Failed:', res.statusCode, data);
+                    resolve(); // Don't reject - email failure shouldn't crash the request
+                }
+            });
+        });
+        req.on('error', e => { console.error('[Email] Error:', e.message); resolve(); });
+        req.write(body);
+        req.end();
+    });
 }
 
 // ============================================================
