@@ -1314,7 +1314,12 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     // POST /api/verification/request - Submit verification request
     if (method === 'POST' && pathname === '/api/verification/request') {
         if (!user) return J(401, { error:'Unauthorized' });
-        const { artistName, phone, socialLinks, reason } = await parseJSON(req);
+        const body = await parseJSON(req);
+        const artistName = body.artist_name || body.artistName;
+        const phone = body.phone;
+        const socialLinks = body.social_links || body.socialLinks;
+        const reason = body.reason;
+        
         if (!artistName || !phone || !socialLinks || !reason) 
             return J(400, { error:'All fields required' });
         
@@ -1356,7 +1361,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     if (method === 'POST' && seg[0]==='verification' && seg[1]==='review' && seg[2] && !seg[3]) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const requestId = seg[2];
-        const { action, adminNotes } = await parseJSON(req);
+        const body = await parseJSON(req);
+        const action = body.action;
+        const adminNotes = body.adminNotes || body.admin_notes || '';
         
         if (!['approve', 'reject'].includes(action)) 
             return J(400, { error:'Invalid action. Must be approve or reject' });
@@ -1370,7 +1377,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         // Update verification request
         await query(
             'UPDATE verification_requests SET status=$1, reviewed_at=NOW(), reviewed_by=$2, admin_notes=$3 WHERE id=$4',
-            [status, user.id, adminNotes || '', requestId]
+            [status, user.id, adminNotes, requestId]
         );
         
         // If approved, update user's verified status
