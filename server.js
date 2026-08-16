@@ -704,6 +704,34 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         }
     }
     // â”€â”€ GET /api/stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // POST /api/auth/forgot-password - Request password reset
+    if (method === 'POST' && pathname === '/api/auth/forgot-password') {
+        const body = await parseJSON(req);
+        const email = body.email;
+        if (!email) return J(400, { error:'Email required' });
+        
+        const user = await query('SELECT * FROM users WHERE email=$1', [email]);
+        if (!user.rows.length) {
+            return J(200, { success:true, message:'If email exists, reset link sent' });
+        }
+        
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetExpiry = new Date(Date.now() + 3600000);
+        
+        await query(
+            'UPDATE users SET reset_token=$1, reset_token_expiry=$2 WHERE email=$3',
+            [resetToken, resetExpiry, email]
+        );
+        
+        console.log('[Reset] Token for', email, ':', resetToken);
+        
+        return J(200, { 
+            success:true, 
+            message:'If email exists, reset link sent',
+            token: resetToken
+        });
+    }
     if (method === 'GET' && pathname === '/api/stats') {
         const songs     = await query('SELECT COUNT(*) FROM songs WHERE approved=TRUE');
         const artists   = await query('SELECT COUNT(DISTINCT artist) FROM songs WHERE approved=TRUE');
