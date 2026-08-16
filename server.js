@@ -150,6 +150,9 @@ async function initDB() {
             email      TEXT UNIQUE NOT NULL,
             password   TEXT NOT NULL,
             is_admin   BOOLEAN DEFAULT FALSE,
+            profile_photo TEXT,
+            reset_token TEXT,
+            reset_token_expiry TIMESTAMPTZ,
             created_at TIMESTAMPTZ DEFAULT NOW()
         )
     `);
@@ -306,6 +309,16 @@ async function initDB() {
             ['MUSTA', 'musitafahkenny288227@gmail.com', hashed]
         );
         console.log('âœ… Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
+    }
+
+    // Add missing columns to existing tables
+    try {
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMPTZ');
+        console.log('âœ… User columns updated');
+    } catch(e) {
+        console.log('âš ï¸ Column update skipped');
     }
 
     console.log('âœ… Database ready');
@@ -1549,7 +1562,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
 
 // Public user object
 function pub(u) {
-    return { id:u.id, username:u.username, email:u.email, isAdmin:!!u.is_admin, createdAt:u.created_at };
+    return { 
+        id:u.id, 
+        username:u.username, 
+        email:u.email, 
+        isAdmin:!!u.is_admin, 
+        profile_photo:u.profile_photo,
+        createdAt:u.created_at 
+    };
 }
 
 // ============================================================
