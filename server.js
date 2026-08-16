@@ -1353,12 +1353,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     // GET /api/verification/requests - Get all verification requests (ADMIN ONLY)
     if (method === 'GET' && pathname === '/api/verification/requests') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const status = parsed.searchParams.get('status') || 'pending';
         const r = await query(`
             SELECT vr.*, u.username, u.email 
             FROM verification_requests vr 
             INNER JOIN users u ON vr.user_id=u.id 
+            WHERE vr.status=$1
             ORDER BY vr.submitted_at DESC
-        `);
+        `, [status]);
         return J(200, { requests: r.rows });
     }
 
