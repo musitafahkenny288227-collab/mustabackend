@@ -1380,6 +1380,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             return J(404, { error:'Verification request not found' });
         
         const status = action === 'approve' ? 'approved' : 'rejected';
+        const userId = request.rows[0].user_id;
         
         // Update verification request
         await query(
@@ -1389,8 +1390,19 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         
         // If approved, update user's verified status
         if (action === 'approve') {
-            await query('UPDATE users SET is_verified=TRUE WHERE id=$1', [request.rows[0].user_id]);
+            await query('UPDATE users SET is_verified=TRUE WHERE id=$1', [userId]);
         }
+        
+        // Send notification to user
+        const notifTitle = action === 'approve' ? '✅ Verification Approved!' : '❌ Verification Rejected';
+        const notifMessage = action === 'approve' 
+            ? 'Congratulations! Your artist verification has been approved. You now have a verified badge on your profile.'
+            : `Your verification request has been rejected. ${adminNotes ? 'Reason: ' + adminNotes : 'Please contact support for more details.'}`;
+        
+        await query(
+            'INSERT INTO notifications (user_id, type, title, message) VALUES ($1, $2, $3, $4)',
+            [userId, 'verification_' + status, notifTitle, notifMessage]
+        );
         
         return J(200, { success:true, message:`Verification request ${action}d successfully` });
     }
