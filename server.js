@@ -1313,36 +1313,41 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
 
     // POST /api/verification/request - Submit verification request
     if (method === 'POST' && pathname === '/api/verification/request') {
-        if (!user) return J(401, { error:'Unauthorized' });
-        const body = await parseJSON(req);
-        const artistName = body.artist_name || body.artistName;
-        const phone = body.phone;
-        const socialLinks = body.social_links || body.socialLinks;
-        const reason = body.reason;
-        
-        if (!artistName || !phone || !socialLinks || !reason) 
-            return J(400, { error:'All fields required' });
-        
-        // Check if already verified
-        const userData = await query('SELECT is_verified FROM users WHERE id=$1', [user.id]);
-        if (userData.rows[0]?.is_verified) 
-            return J(400, { error:'You are already verified' });
-        
-        // Check for pending request
-        const existing = await query(
-            'SELECT id FROM verification_requests WHERE user_id=$1 AND status=$2',
-            [user.id, 'pending']
-        );
-        if (existing.rows.length > 0) 
-            return J(400, { error:'You already have a pending verification request' });
-        
-        // Insert request
-        await query(
-            'INSERT INTO verification_requests (user_id, artist_name, phone, social_links, reason, status) VALUES ($1,$2,$3,$4,$5,$6)',
-            [user.id, artistName, phone, socialLinks, reason, 'pending']
-        );
-        
-        return J(201, { success:true, message:'Verification request submitted successfully' });
+        try {
+            if (!user) return J(401, { error:'Unauthorized' });
+            const body = await parseJSON(req);
+            const artistName = body.artist_name || body.artistName;
+            const phone = body.phone;
+            const socialLinks = body.social_links || body.socialLinks;
+            const reason = body.reason;
+            
+            if (!artistName || !phone || !socialLinks || !reason) 
+                return J(400, { error:'All fields required' });
+            
+            // Check if already verified
+            const userData = await query('SELECT is_verified FROM users WHERE id=$1', [user.id]);
+            if (userData.rows[0]?.is_verified) 
+                return J(400, { error:'You are already verified' });
+            
+            // Check for pending request
+            const existing = await query(
+                'SELECT id FROM verification_requests WHERE user_id=$1 AND status=$2',
+                [user.id, 'pending']
+            );
+            if (existing.rows.length > 0) 
+                return J(400, { error:'You already have a pending verification request' });
+            
+            // Insert request
+            await query(
+                'INSERT INTO verification_requests (user_id, artist_name, phone, social_links, reason, status) VALUES ($1,$2,$3,$4,$5,$6)',
+                [user.id, artistName, phone, socialLinks, reason, 'pending']
+            );
+            
+            return J(201, { success:true, message:'Verification request submitted successfully' });
+        } catch (err) {
+            console.error('[Verification Request Error]', err);
+            return J(500, { error: 'Internal server error: ' + err.message });
+        }
     }
 
     // GET /api/verification/requests - Get all verification requests (ADMIN ONLY)
