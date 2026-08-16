@@ -351,6 +351,7 @@ async function initDB() {
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token TEXT');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expiry TIMESTAMPTZ');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_since TIMESTAMPTZ');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_note TEXT');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE');
@@ -901,7 +902,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     // â”€â”€ GET /api/songs/admin/users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/songs/admin/users') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const r = await query('SELECT * FROM users ORDER BY created_at DESC');
+        const r = await query('SELECT id,username,email,is_admin,is_premium,is_verified,profile_photo,last_login,created_at FROM users ORDER BY COALESCE(last_login,created_at) DESC');
         return J(200, { users: r.rows.map(pub) });
     }
 
@@ -1879,6 +1880,36 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             ORDER BY s.created_at DESC LIMIT 20
         `);
         return J(200, { songs: r.rows });
+    }
+
+    // POST /api/songs/:id/report - Report a song
+    if (method === 'POST' && seg[0]==='songs' && seg[1] && seg[2]==='report') {
+        if (!user) return J(401, { error:'Login required' });
+        const { reason } = await parseJSON(req);
+        if (!reason) return J(400, { error:'Please provide a reason' });
+        await query('INSERT INTO notifications (user_id,type,title,message) VALUES ($1,$2,$3,$4)',
+            [1, 'report', `🚨 Song Report - ID ${seg[1]}`,
+             `User ${user.email} reported song #${seg[1]}. Reason: ${reason}`]);
+        return J(200, { success:true, message:'Song reported. Admin will review it.' });
+    }
+
+    // GET /api/songs/:id/embed - Get embed code info
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='embed') {
+        const r = await query('SELECT id,title,artist,cover_path,duration FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
+        if (!r.rows[0]) return J(404, { error:'Song not found' });
+        const s = r.rows[0];
+        const embedUrl = `${SITE_URL}?song=${s.id}`;
+        const embedCode = `<iframe src="${SITE_URL}/embed/${s.id}" width="100%" height="120" frameborder="0" allow="autoplay" style="border-radius:12px"></iframe>`;
+        return J(200, { song: s, embedUrl, embedCode });
+    }
+
+    // PATCH /api/admin/password - Admin change own password
+    if (method === 'PATCH' && pathname === '/api/admin/password') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const { newPassword } = await parseJSON(req);
+        if (!newPassword || newPassword.length < 6) return J(400, { error:'Password must be at least 6 characters' });
+        await query('UPDATE users SET password=$1 WHERE id=$2', [hashPassword(newPassword), user.id]);
+        return J(200, { success:true });
     }
 
     J(404, { error:'Endpoint not found' });
