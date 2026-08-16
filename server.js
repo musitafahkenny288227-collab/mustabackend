@@ -190,6 +190,14 @@ setInterval(async () => {
     try { await query('SELECT 1'); } catch(e) { console.log('[DB Keep-alive] ping failed:', e.message); }
 }, 4 * 60 * 1000);
 
+// Keep Render server awake - self ping every 10 minutes
+setInterval(() => {
+    const url = process.env.RENDER_EXTERNAL_URL || 'https://mustabackend-nenb.onrender.com';
+    https.get(url + '/api/health', (res) => {
+        console.log('[Server Keep-alive] ping:', res.statusCode);
+    }).on('error', () => {});
+}, 10 * 60 * 1000);
+
 // ============================================================
 // INIT DATABASE TABLES
 // ============================================================
