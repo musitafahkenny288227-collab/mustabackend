@@ -60,7 +60,7 @@ async function setupVerificationTable() {
         console.error('âš ï¸ Verification table setup error:', err.message);
     }
 }
-setupVerificationTable();
+// setupVerificationTable(); // Table already created manually
 
 // Warn if using default JWT secret in production
 if (JWT_SECRET === 'djmusta_secret_2026' && process.env.NODE_ENV === 'production') {
