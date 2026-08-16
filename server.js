@@ -12,6 +12,29 @@ const path   = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
+
+// ============================================================
+// EMAIL SETUP (Gmail - use App Password)
+// ============================================================
+const EMAIL_USER = process.env.EMAIL_USER || 'musitafahkenny288227@gmail.com';
+const EMAIL_PASS = process.env.EMAIL_PASS || '';  // Set this in Render env vars
+const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.pages.dev';
+
+const mailer = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: EMAIL_USER, pass: EMAIL_PASS }
+});
+
+async function sendEmail(to, subject, html) {
+    if (!EMAIL_PASS) { console.log('[Email] No EMAIL_PASS set, skipping send to:', to, '| Subject:', subject); return; }
+    try {
+        await mailer.sendMail({ from: `"DJ Musta Music" <${EMAIL_USER}>`, to, subject, html });
+        console.log('[Email] Sent to:', to, '| Subject:', subject);
+    } catch(e) {
+        console.error('[Email] Failed:', e.message);
+    }
+}
 
 // ============================================================
 // CONFIG
@@ -316,12 +339,18 @@ async function initDB() {
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMPTZ');
-        console.log('âœ… User columns updated');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token TEXT');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token_expiry TIMESTAMPTZ');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_since TIMESTAMPTZ');
+        await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_note TEXT');
+        console.log('✅ User columns updated');
     } catch(e) {
-        console.log('âš ï¸ Column update skipped');
+        console.log('⚠️ Column update skipped');
     }
 
-    console.log('âœ… Database ready');
+    console.log('✅ Database ready');
 }
 
 // ============================================================
@@ -649,10 +678,58 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return J(400, { error:'Invalid email' });
         const exists = await query('SELECT id FROM users WHERE email=$1 OR username=$2', [email, username]);
         if (exists.rows.length) return J(409, { error:'Email or username already taken' });
-        const r = await query('INSERT INTO users (username,email,password) VALUES ($1,$2,$3) RETURNING *', [username, email, hashPassword(password)]);
+
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const verifyExpiry = new Date(Date.now() + 24 * 3600000);
+
+        const r = await query(
+            'INSERT INTO users (username,email,password,verify_token,verify_token_expiry) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+            [username, email, hashPassword(password), verifyToken, verifyExpiry]
+        );
         const u = r.rows[0];
-        const token = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:false });
-        return J(201, { token, user: pub(u) });
+        const jwtToken = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:false });
+
+        const verifyLink = `${SITE_URL}?verify=${verifyToken}`;
+        sendEmail(email, '✅ Verify Your DJ Musta Account', `
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                <h2 style="color:#a855f7">🎵 Welcome to DJ Musta Music!</h2>
+                <p>Hi <strong>${username}</strong>, thanks for joining Uganda's #1 music platform!</p>
+                <p>Please verify your email to unlock all features:</p>
+                <a href="${verifyLink}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">✅ Verify My Email</a>
+                <p style="color:#94a3b8;font-size:13px">Link expires in 24 hours.</p>
+            </div>`
+        );
+
+        return J(201, { token: jwtToken, user: pub(u), message: 'Account created! Check your email to verify.' });
+    }
+
+    // GET /api/auth/verify/:token - Verify email
+    if (method === 'GET' && seg[0]==='auth' && seg[1]==='verify' && seg[2]) {
+        const r = await query('SELECT * FROM users WHERE verify_token=$1', [seg[2]]);
+        if (!r.rows[0]) return J(400, { error:'Invalid or expired verification link' });
+        if (new Date(r.rows[0].verify_token_expiry) < new Date()) return J(400, { error:'Verification link expired. Please resend.' });
+        await query('UPDATE users SET is_verified=TRUE, verify_token=NULL, verify_token_expiry=NULL WHERE id=$1', [r.rows[0].id]);
+        return J(200, { success:true, message:'Email verified! You can now access all features.' });
+    }
+
+    // POST /api/auth/resend-verification - Resend verification email
+    if (method === 'POST' && pathname === '/api/auth/resend-verification') {
+        if (!user) return J(401, { error:'Login required' });
+        const u = (await query('SELECT * FROM users WHERE id=$1', [user.id])).rows[0];
+        if (!u) return J(404, { error:'User not found' });
+        if (u.is_verified) return J(400, { error:'Email already verified' });
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const verifyExpiry = new Date(Date.now() + 24 * 3600000);
+        await query('UPDATE users SET verify_token=$1, verify_token_expiry=$2 WHERE id=$3', [verifyToken, verifyExpiry, user.id]);
+        const verifyLink = `${SITE_URL}?verify=${verifyToken}`;
+        sendEmail(u.email, '✅ Verify Your DJ Musta Account', `
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                <h2 style="color:#a855f7">🎵 DJ Musta - Email Verification</h2>
+                <p>Click below to verify your email:</p>
+                <a href="${verifyLink}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">✅ Verify My Email</a>
+            </div>`
+        );
+        return J(200, { success:true, message:'Verification email sent!' });
     }
 
     // â”€â”€ POST /api/auth/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -697,22 +774,19 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const email = body.email;
         const username = body.username;
         if (!email) return J(400, { error:'Email required' });
-        
         let existingUser = await query('SELECT * FROM users WHERE email=$1', [email]);
-        
         if (existingUser.rows.length) {
             const u = existingUser.rows[0];
-            const tkn = jwt.sign({ id:u.id, email:u.email }, JWT_SECRET, { expiresIn:'30d' });
+            const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:!!u.is_admin });
             return J(200, { token:tkn, user:pub(u) });
         } else {
             const randomPass = crypto.randomBytes(16).toString('hex');
-            const hash = hashPassword(randomPass);
             const r = await query(
-                'INSERT INTO users (username,email,password) VALUES ($1,$2,$3) RETURNING *',
-                [username || email.split('@')[0], email, hash]
+                'INSERT INTO users (username,email,password,is_verified) VALUES ($1,$2,$3,TRUE) RETURNING *',
+                [username || email.split('@')[0], email, hashPassword(randomPass)]
             );
             const u = r.rows[0];
-            const tkn = jwt.sign({ id:u.id, email:u.email }, JWT_SECRET, { expiresIn:'30d' });
+            const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:false });
             return J(201, { token:tkn, user:pub(u) });
         }
     }
@@ -723,27 +797,35 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const body = await parseJSON(req);
         const email = body.email;
         if (!email) return J(400, { error:'Email required' });
-        
-        const user = await query('SELECT * FROM users WHERE email=$1', [email]);
-        if (!user.rows.length) {
-            return J(200, { success:true, message:'If email exists, reset link sent' });
-        }
+        const userRow = await query('SELECT * FROM users WHERE email=$1', [email]);
+        if (!userRow.rows.length) return J(200, { success:true, message:'If that email exists, a reset link was sent.' });
         
         const resetToken = crypto.randomBytes(32).toString('hex');
-        const resetExpiry = new Date(Date.now() + 3600000);
-        
-        await query(
-            'UPDATE users SET reset_token=$1, reset_token_expiry=$2 WHERE email=$3',
-            [resetToken, resetExpiry, email]
+        const resetExpiry = new Date(Date.now() + 3600000); // 1 hour
+        await query('UPDATE users SET reset_token=$1, reset_token_expiry=$2 WHERE email=$3', [resetToken, resetExpiry, email]);
+
+        const resetLink = `${SITE_URL}?reset=${resetToken}`;
+        sendEmail(email, '🔑 Reset Your DJ Musta Password', `
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                <h2 style="color:#a855f7">🔑 Password Reset Request</h2>
+                <p>We received a request to reset your password for DJ Musta Music.</p>
+                <a href="${resetLink}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">Reset My Password</a>
+                <p style="color:#94a3b8;font-size:13px">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+            </div>`
         );
-        
-        console.log('[Reset] Token for', email, ':', resetToken);
-        
-        return J(200, { 
-            success:true, 
-            message:'If email exists, reset link sent',
-            token: resetToken
-        });
+        return J(200, { success:true, message:'Password reset link sent to your email!' });
+    }
+
+    // POST /api/auth/reset-password - Actually reset password using token
+    if (method === 'POST' && pathname === '/api/auth/reset-password') {
+        const { token: resetToken, password: newPassword } = await parseJSON(req);
+        if (!resetToken || !newPassword) return J(400, { error:'Token and new password required' });
+        if (newPassword.length < 6) return J(400, { error:'Password must be at least 6 characters' });
+        const r = await query('SELECT * FROM users WHERE reset_token=$1', [resetToken]);
+        if (!r.rows[0]) return J(400, { error:'Invalid or expired reset link' });
+        if (new Date(r.rows[0].reset_token_expiry) < new Date()) return J(400, { error:'Reset link has expired. Please request a new one.' });
+        await query('UPDATE users SET password=$1, reset_token=NULL, reset_token_expiry=NULL WHERE id=$2', [hashPassword(newPassword), r.rows[0].id]);
+        return J(200, { success:true, message:'Password reset successfully! You can now login.' });
     }
     if (method === 'GET' && pathname === '/api/stats') {
         const songs     = await query('SELECT COUNT(*) FROM songs WHERE approved=TRUE');
@@ -1007,16 +1089,48 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         await query('UPDATE songs SET approved=TRUE WHERE id=$1', [seg[1]]);
         
-        // âœ¨ AUTO-UPDATE SITEMAP
+        // AUTO-UPDATE SITEMAP
         try {
-            const songData = await query('SELECT id, title, artist FROM songs WHERE id=$1', [seg[1]]);
+            const songData = await query('SELECT s.*, u.email as uploader_email, u.username as uploader_name FROM songs s LEFT JOIN users u ON s.uploaded_by=u.id WHERE s.id=$1', [seg[1]]);
             if (songData.rows[0]) {
-                updateSitemap(songData.rows[0]);
-                // Ping search engines in background (don't wait)
+                const s = songData.rows[0];
+                updateSitemap(s);
                 pingSearchEngines().catch(err => console.log('Ping failed:', err.message));
+
+                // Email uploader
+                if (s.uploader_email) {
+                    sendEmail(s.uploader_email, '✅ Your Song Was Approved - DJ Musta', `
+                        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                            <h2 style="color:#22c55e">✅ Song Approved!</h2>
+                            <p>Hi <strong>${s.uploader_name}</strong>, your song has been approved and is now live!</p>
+                            <p style="background:#1a1f3a;padding:16px;border-radius:8px;border-left:4px solid #a855f7">
+                                🎵 <strong>${s.title}</strong> by ${s.artist}
+                            </p>
+                            <a href="${SITE_URL}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">Listen on DJ Musta</a>
+                        </div>`
+                    );
+                }
+
+                // Notify followers of the artist
+                const followers = await query('SELECT u.id, u.email, u.username FROM follows f JOIN users u ON f.follower_id=u.id WHERE LOWER(f.artist_name)=LOWER($1)', [s.artist]);
+                for (const follower of followers.rows) {
+                    await query('INSERT INTO notifications (user_id,type,title,message) VALUES ($1,$2,$3,$4)',
+                        [follower.id, 'new_song', `🎵 ${s.artist} uploaded a new song!`, `"${s.title}" is now available on DJ Musta. Go listen now!`]
+                    );
+                    sendEmail(follower.email, `🎵 ${s.artist} - New Song on DJ Musta`, `
+                        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                            <h2 style="color:#a855f7">🎵 New Song from ${s.artist}!</h2>
+                            <p>Hi <strong>${follower.username}</strong>, an artist you follow just dropped a new track!</p>
+                            <p style="background:#1a1f3a;padding:16px;border-radius:8px;border-left:4px solid #a855f7">
+                                🎵 <strong>${s.title}</strong> by ${s.artist}
+                            </p>
+                            <a href="${SITE_URL}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">Listen Now</a>
+                        </div>`
+                    );
+                }
             }
         } catch (err) {
-            console.error('Sitemap update failed:', err.message);
+            console.error('Post-approve actions failed:', err.message);
         }
         
         return J(200, { success:true });
@@ -1530,6 +1644,32 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             'INSERT INTO notifications (user_id, type, title, message) VALUES ($1, $2, $3, $4)',
             [userId, 'verification_' + status, notifTitle, notifMessage]
         );
+
+        // Send email notification
+        const userInfo = await query('SELECT email, username FROM users WHERE id=$1', [userId]);
+        if (userInfo.rows[0]) {
+            const { email: uEmail, username: uName } = userInfo.rows[0];
+            if (action === 'approve') {
+                sendEmail(uEmail, '✅ Artist Verification Approved - DJ Musta', `
+                    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                        <h2 style="color:#22c55e">✅ Congratulations ${uName}!</h2>
+                        <p>Your artist verification request has been <strong>approved</strong>!</p>
+                        <p>You now have a ✓ Verified badge on your DJ Musta profile.</p>
+                        <a href="${SITE_URL}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">Visit DJ Musta</a>
+                    </div>`
+                );
+            } else {
+                sendEmail(uEmail, '❌ Artist Verification Update - DJ Musta', `
+                    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                        <h2 style="color:#ef4444">Verification Update</h2>
+                        <p>Hi <strong>${uName}</strong>, your verification request was not approved at this time.</p>
+                        ${adminNotes ? `<p style="background:#1a1f3a;padding:12px;border-radius:8px"><strong>Reason:</strong> ${adminNotes}</p>` : ''}
+                        <p>You can submit a new request with more information.</p>
+                        <a href="${SITE_URL}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">Visit DJ Musta</a>
+                    </div>`
+                );
+            }
+        }
         
         return J(200, { success:true, message:`Verification request ${action}d successfully` });
     }
@@ -1565,6 +1705,111 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true, message:'Verification request deleted' });
     }
 
+    // ── PREMIUM MANAGEMENT ───────────────────────────────────────────
+
+    // GET /api/admin/premium - List all premium users (admin)
+    if (method === 'GET' && pathname === '/api/admin/premium') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const r = await query('SELECT id,username,email,is_premium,premium_since,premium_note,created_at FROM users WHERE is_premium=TRUE ORDER BY premium_since DESC');
+        return J(200, { users: r.rows });
+    }
+
+    // PATCH /api/admin/premium/:id - Grant/revoke premium (admin)
+    if (method === 'PATCH' && seg[0]==='admin' && seg[1]==='premium' && seg[2]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const { isPremium, note } = await parseJSON(req);
+        const target = (await query('SELECT * FROM users WHERE id=$1', [seg[2]])).rows[0];
+        if (!target) return J(404, { error:'User not found' });
+        await query('UPDATE users SET is_premium=$1, premium_since=$2, premium_note=$3 WHERE id=$4',
+            [!!isPremium, isPremium ? new Date() : null, note||null, seg[2]]);
+        // Notify user
+        await query('INSERT INTO notifications (user_id,type,title,message) VALUES ($1,$2,$3,$4)',
+            [seg[2], 'premium', isPremium ? '👑 Premium Activated!' : '⚠️ Premium Ended',
+             isPremium ? 'Your account has been upgraded to Premium! Enjoy all features.' : 'Your premium subscription has ended.']);
+        if (target.email) {
+            sendEmail(target.email, isPremium ? '👑 Premium Activated - DJ Musta' : 'Premium Subscription Update', `
+                <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+                    <h2 style="color:#f59e0b">${isPremium ? '👑 Premium Activated!' : 'Subscription Update'}</h2>
+                    <p>Hi <strong>${target.username}</strong>,</p>
+                    <p>${isPremium ? 'Your DJ Musta account has been upgraded to <strong>Premium</strong>! Enjoy unlimited downloads, no ads, and more.' : 'Your premium subscription has ended. Contact us to renew.'}</p>
+                    ${note ? `<p style="background:#1a1f3a;padding:12px;border-radius:8px">Note: ${note}</p>` : ''}
+                    <a href="${SITE_URL}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#f59e0b;color:white;border-radius:8px;text-decoration:none;font-weight:700">Visit DJ Musta</a>
+                </div>`);
+        }
+        return J(200, { success:true });
+    }
+
+    // ── CHARTS / TOP 10 ──────────────────────────────────────────────
+
+    // GET /api/charts/top10 - Top 10 songs this week
+    if (method === 'GET' && pathname === '/api/charts/top10') {
+        const r = await query(`
+            SELECT s.*, COUNT(p.id) as week_plays
+            FROM songs s
+            LEFT JOIN plays p ON s.id=p.song_id AND p.created_at > NOW() - INTERVAL '7 days'
+            WHERE s.approved=TRUE
+            GROUP BY s.id
+            ORDER BY week_plays DESC, s.like_count DESC
+            LIMIT 10
+        `);
+        return J(200, { songs: r.rows });
+    }
+
+    // GET /api/charts/top-artists - Top 5 artists this week
+    if (method === 'GET' && pathname === '/api/charts/top-artists') {
+        const r = await query(`
+            SELECT s.artist, COUNT(p.id) as week_plays, SUM(s.like_count) as total_likes
+            FROM songs s
+            LEFT JOIN plays p ON s.id=p.song_id AND p.created_at > NOW() - INTERVAL '7 days'
+            WHERE s.approved=TRUE
+            GROUP BY s.artist
+            ORDER BY week_plays DESC
+            LIMIT 5
+        `);
+        return J(200, { artists: r.rows });
+    }
+
+    // GET /api/songs/:id/related - Related songs by same artist
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='related') {
+        const song = (await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]])).rows[0];
+        if (!song) return J(404, { error:'Song not found' });
+        const related = await query(`
+            SELECT * FROM songs
+            WHERE approved=TRUE AND id != $1 AND (LOWER(artist)=LOWER($2) OR genre=$3)
+            ORDER BY CASE WHEN LOWER(artist)=LOWER($2) THEN 0 ELSE 1 END, play_count DESC
+            LIMIT 8
+        `, [seg[1], song.artist, song.genre]);
+        return J(200, { songs: related.rows });
+    }
+
+    // ── ADMIN STATS for revenue dashboard ───────────────────────────
+
+    // GET /api/admin/stats - Full platform stats for admin dashboard
+    if (method === 'GET' && pathname === '/api/admin/stats') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const [songs, users, premium, plays, downloads, pending, comments, verifications] = await Promise.all([
+            query('SELECT COUNT(*) FROM songs WHERE approved=TRUE'),
+            query('SELECT COUNT(*) FROM users'),
+            query('SELECT COUNT(*) FROM users WHERE is_premium=TRUE'),
+            query('SELECT COALESCE(SUM(play_count),0) FROM songs WHERE approved=TRUE'),
+            query('SELECT COALESCE(SUM(download_count),0) FROM songs WHERE approved=TRUE'),
+            query('SELECT COUNT(*) FROM songs WHERE approved=FALSE'),
+            query('SELECT COUNT(*) FROM comments'),
+            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'")
+        ]);
+        return J(200, {
+            songs: parseInt(songs.rows[0].count),
+            users: parseInt(users.rows[0].count),
+            premium: parseInt(premium.rows[0].count),
+            plays: parseInt(plays.rows[0].coalesce),
+            downloads: parseInt(downloads.rows[0].coalesce),
+            pending: parseInt(pending.rows[0].count),
+            comments: parseInt(comments.rows[0].count),
+            verifications: parseInt(verifications.rows[0].count),
+            revenue: parseInt(premium.rows[0].count) * 10000
+        });
+    }
+
     J(404, { error:'Endpoint not found' });
 }
 
@@ -1574,7 +1819,9 @@ function pub(u) {
         id:u.id, 
         username:u.username, 
         email:u.email, 
-        isAdmin:!!u.is_admin, 
+        isAdmin:!!u.is_admin,
+        isVerified:!!u.is_verified,
+        isPremium:!!u.is_premium,
         profile_photo:u.profile_photo,
         createdAt:u.created_at 
     };
