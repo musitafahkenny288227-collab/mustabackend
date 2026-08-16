@@ -678,80 +678,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     if (pathname === '/api/health') return J(200, { status:'ok', uptime: process.uptime() });
 
     // â”€â”€ POST /api/auth/register â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // POST /api/auth/register - DISABLED (Google only)
     if (method === 'POST' && pathname === '/api/auth/register') {
-        if (authRateLimit(ip)) return J(429, { error: 'Too many attempts. Try again in a minute.' });
-        const { username, email, password } = await parseJSON(req);
-        if (!username || !email || !password) return J(400, { error:'All fields required' });
-        if (username.length < 3) return J(400, { error:'Username must be at least 3 characters' });
-        if (password.length < 6) return J(400, { error:'Password must be at least 6 characters' });
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return J(400, { error:'Invalid email' });
-        const exists = await query('SELECT id FROM users WHERE email=$1 OR username=$2', [email, username]);
-        if (exists.rows.length) return J(409, { error:'Email or username already taken' });
-
-        const verifyToken = crypto.randomBytes(32).toString('hex');
-        const verifyExpiry = new Date(Date.now() + 24 * 3600000);
-
-        const r = await query(
-            'INSERT INTO users (username,email,password,verify_token,verify_token_expiry) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-            [username, email, hashPassword(password), verifyToken, verifyExpiry]
-        );
-        const u = r.rows[0];
-        const jwtToken = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:false });
-
-        const verifyLink = `${SITE_URL}?verify=${verifyToken}`;
-        sendEmail(email, '✅ Verify Your DJ Musta Account', `
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
-                <h2 style="color:#a855f7">🎵 Welcome to DJ Musta Music!</h2>
-                <p>Hi <strong>${username}</strong>, thanks for joining Uganda's #1 music platform!</p>
-                <p>Please verify your email to unlock all features:</p>
-                <a href="${verifyLink}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">✅ Verify My Email</a>
-                <p style="color:#94a3b8;font-size:13px">Link expires in 24 hours.</p>
-            </div>`
-        );
-
-        return J(201, { token: jwtToken, user: pub(u), message: 'Account created! Check your email to verify.' });
+        return J(403, { error:'Registration is only allowed via Google. Please use Google Sign-In.' });
     }
 
-    // GET /api/auth/verify/:token - Verify email
-    if (method === 'GET' && seg[0]==='auth' && seg[1]==='verify' && seg[2]) {
-        const r = await query('SELECT * FROM users WHERE verify_token=$1', [seg[2]]);
-        if (!r.rows[0]) return J(400, { error:'Invalid or expired verification link' });
-        if (new Date(r.rows[0].verify_token_expiry) < new Date()) return J(400, { error:'Verification link expired. Please resend.' });
-        await query('UPDATE users SET is_verified=TRUE, verify_token=NULL, verify_token_expiry=NULL WHERE id=$1', [r.rows[0].id]);
-        return J(200, { success:true, message:'Email verified! You can now access all features.' });
-    }
-
-    // POST /api/auth/resend-verification - Resend verification email
-    if (method === 'POST' && pathname === '/api/auth/resend-verification') {
-        if (!user) return J(401, { error:'Login required' });
-        const u = (await query('SELECT * FROM users WHERE id=$1', [user.id])).rows[0];
-        if (!u) return J(404, { error:'User not found' });
-        if (u.is_verified) return J(400, { error:'Email already verified' });
-        const verifyToken = crypto.randomBytes(32).toString('hex');
-        const verifyExpiry = new Date(Date.now() + 24 * 3600000);
-        await query('UPDATE users SET verify_token=$1, verify_token_expiry=$2 WHERE id=$3', [verifyToken, verifyExpiry, user.id]);
-        const verifyLink = `${SITE_URL}?verify=${verifyToken}`;
-        sendEmail(u.email, '✅ Verify Your DJ Musta Account', `
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
-                <h2 style="color:#a855f7">🎵 DJ Musta - Email Verification</h2>
-                <p>Click below to verify your email:</p>
-                <a href="${verifyLink}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">✅ Verify My Email</a>
-            </div>`
-        );
-        return J(200, { success:true, message:'Verification email sent!' });
-    }
-
-    // â”€â”€ POST /api/auth/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // POST /api/auth/login - DISABLED (Google only)
     if (method === 'POST' && pathname === '/api/auth/login') {
-        if (authRateLimit(ip)) return J(429, { error: 'Too many attempts. Try again in a minute.' });
-        const { email, password } = await parseJSON(req);
-        if (!email || !password) return J(400, { error:'Email and password required' });
-        const r = await query('SELECT * FROM users WHERE email=$1', [email]);
-        const u = r.rows[0];
-        if (!u || !verifyPassword(password, u.password)) return J(401, { error:'Invalid email or password' });
-        const token = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:!!u.is_admin });
-        return J(200, { token, user: pub(u) });
-    }
+        return J(403, { error:'Login is only allowed via Google. Please use Google Sign-In.' });
 
     // â”€â”€ GET /api/auth/me â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/auth/me') {
