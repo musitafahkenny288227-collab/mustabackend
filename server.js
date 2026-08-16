@@ -852,6 +852,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const category = q.get('category') || 'all';
         const search   = q.get('search') || '';
         const genre    = q.get('genre') || '';
+        const uploader = q.get('uploader') || '';
         const limit    = Math.min(parseInt(q.get('limit') || 20), 100);
         const offset   = parseInt(q.get('offset') || 0);
 
@@ -867,6 +868,11 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (genre) {
             where += ` AND LOWER(genre) = $${idx}`;
             params.push(genre.toLowerCase());
+            idx++;
+        }
+        if (uploader) {
+            where += ` AND uploaded_by = $${idx}`;
+            params.push(parseInt(uploader));
             idx++;
         }
 
@@ -1543,10 +1549,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const plays = await query('SELECT COUNT(*) FROM plays WHERE user_id=$1', [user.id]);
         const likes = await query('SELECT COUNT(*) FROM likes WHERE user_id=$1', [user.id]);
         const downloads = await query('SELECT COUNT(*) FROM downloads WHERE user_id=$1', [user.id]);
+        const uploads = await query('SELECT COUNT(*) FROM songs WHERE uploaded_by=$1', [user.id]);
+        const playlists = await query('SELECT COUNT(*) FROM playlists WHERE user_id=$1', [user.id]);
         return J(200, {
             plays: parseInt(plays.rows[0].count),
             likes: parseInt(likes.rows[0].count),
-            downloads: parseInt(downloads.rows[0].count)
+            downloads: parseInt(downloads.rows[0].count),
+            uploads: parseInt(uploads.rows[0].count),
+            playlists: parseInt(playlists.rows[0].count)
         });
     }
 
