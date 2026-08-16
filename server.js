@@ -1207,6 +1207,33 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
+    // POST /api/artists/photo - Upload artist photo as base64 (admin only)
+    if (method === 'POST' && pathname === '/api/artists/photo') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        try {
+            const { fields, files } = await parseMultipart(req);
+            const photo = files['photo'];
+            const artistName = fields['artistName'];
+            if (!photo) return J(400, { error:'No photo uploaded' });
+            if (!artistName) return J(400, { error:'Artist name required' });
+            if (photo.data.length > 2 * 1024 * 1024) return J(400, { error:'Photo too large. Max 2MB.' });
+
+            const base64 = photo.data.toString('base64');
+            const dataUrl = `data:${photo.mimetype};base64,${base64}`;
+
+            const existing = await query('SELECT id FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
+            if (existing.rows.length) {
+                await query('UPDATE artists SET photo_url=$1 WHERE LOWER(name)=LOWER($2)', [dataUrl, artistName]);
+            } else {
+                await query('INSERT INTO artists (name, photo_url) VALUES ($1,$2)', [artistName, dataUrl]);
+            }
+            return J(200, { success:true, photoUrl: dataUrl });
+        } catch(err) {
+            console.error('[Artist Photo] Error:', err);
+            return J(500, { error:'Upload failed: ' + err.message });
+        }
+    }
+
     // â”€â”€ HISTORY & RECOMMENDATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // GET /api/history/recent - Recently played songs
@@ -1373,46 +1400,27 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // POST /api/auth/profile/photo - Upload profile photo
+    // POST /api/auth/profile/photo - Upload profile photo (stored as base64 in DB)
     if (method === 'POST' && pathname === '/api/auth/profile/photo') {
         if (!user) return J(401, { error:'Login required' });
-        
-        const boundary = req.headers['content-type']?.split('boundary=')[1];
-        if (!boundary) return J(400, { error:'No boundary in multipart request' });
-        
-        const chunks = [];
-        for await (const chunk of req) chunks.push(chunk);
-        const buffer = Buffer.concat(chunks);
-        
-        const parts = buffer.toString('binary').split('--' + boundary);
-        let photoBuffer, photoName, photoType;
-        
-        for (const part of parts) {
-            if (part.includes('filename=')) {
-                const nameMatch = part.match(/filename="(.+?)"/);
-                if (nameMatch) photoName = nameMatch[1];
-                const typeMatch = part.match(/Content-Type: (.+?)\r\n/);
-                if (typeMatch) photoType = typeMatch[1];
-                const dataStart = part.indexOf('\r\n\r\n') + 4;
-                const dataEnd = part.lastIndexOf('\r\n');
-                if (dataStart > 3 && dataEnd > dataStart) {
-                    photoBuffer = Buffer.from(part.slice(dataStart, dataEnd), 'binary');
-                }
-            }
+        try {
+            const { fields, files } = await parseMultipart(req);
+            const photo = files['photo'];
+            if (!photo) return J(400, { error:'No photo uploaded' });
+
+            // Resize check - limit to 2MB
+            if (photo.data.length > 2 * 1024 * 1024) return J(400, { error:'Photo too large. Max 2MB.' });
+
+            // Store as base64 data URL directly in DB
+            const base64 = photo.data.toString('base64');
+            const dataUrl = `data:${photo.mimetype};base64,${base64}`;
+
+            await query('UPDATE users SET profile_photo=$1 WHERE id=$2', [dataUrl, user.id]);
+            return J(200, { success:true, photoUrl: dataUrl });
+        } catch(err) {
+            console.error('[Profile Photo] Error:', err);
+            return J(500, { error:'Upload failed: ' + err.message });
         }
-        
-        if (!photoBuffer) return J(400, { error:'No photo uploaded' });
-        
-        const ext = photoName.split('.').pop() || 'jpg';
-        const filename = Date.now() + '-profile.' + ext;
-        const filepath = path.join(__dirname, 'uploads', 'profiles', filename);
-        
-        fs.mkdirSync(path.join(__dirname, 'uploads', 'profiles'), { recursive:true });
-        fs.writeFileSync(filepath, photoBuffer);
-        
-        await query('UPDATE users SET profile_photo=$1 WHERE id=$2', ['/uploads/profiles/'+filename, user.id]);
-        
-        return J(200, { success:true, photoUrl:'/uploads/profiles/'+filename });
     }
 
     // GET /api/stats/user - Get user-specific stats
