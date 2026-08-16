@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // DJ MUSTA MUSIC - BACKEND SERVER
 // Node.js + PostgreSQL (Supabase)
 // Run: node server.js
@@ -55,16 +55,16 @@ async function setupVerificationTable() {
                 admin_notes TEXT
             )
         `);
-        console.log('✅ Verification requests table ready');
+        console.log('âœ… Verification requests table ready');
     } catch (err) {
-        console.error('⚠️ Verification table setup error:', err.message);
+        console.error('âš ï¸ Verification table setup error:', err.message);
     }
 }
 setupVerificationTable();
 
 // Warn if using default JWT secret in production
 if (JWT_SECRET === 'djmusta_secret_2026' && process.env.NODE_ENV === 'production') {
-    console.warn('⚠️  WARNING: Using default JWT_SECRET in production. Set JWT_SECRET env var!');
+    console.warn('âš ï¸  WARNING: Using default JWT_SECRET in production. Set JWT_SECRET env var!');
 }
 
 // ============================================================
@@ -298,17 +298,17 @@ async function initDB() {
             'UPDATE users SET username=$1, password=$2, is_admin=TRUE WHERE email=$3',
             ['MUSTA', hashed, 'musitafahkenny288227@gmail.com']
         );
-        console.log('✅ Admin updated: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
+        console.log('âœ… Admin updated: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
     } else {
         // Insert new admin
         await query(
             'INSERT INTO users (username, email, password, is_admin) VALUES ($1,$2,$3,TRUE)',
             ['MUSTA', 'musitafahkenny288227@gmail.com', hashed]
         );
-        console.log('✅ Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
+        console.log('âœ… Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
     }
 
-    console.log('✅ Database ready');
+    console.log('âœ… Database ready');
 }
 
 // ============================================================
@@ -593,7 +593,7 @@ const server = http.createServer(async (req, res) => {
         return res.end();
     }
 
-    // Rate limiting — 60 requests per minute per IP
+    // Rate limiting â€” 60 requests per minute per IP
     if (rateLimit(ip)) {
         return jsonRes(res, 429, { error: 'Too many requests. Please slow down.' }, origin);
     }
@@ -623,10 +623,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     const user = getUser(req);
     const J    = (status, data) => jsonRes(res, status, data, origin);
 
-    // ── GET /api/health ──────────────────────────────────────
+    // â”€â”€ GET /api/health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (pathname === '/api/health') return J(200, { status:'ok', uptime: process.uptime() });
 
-    // ── POST /api/auth/register ──────────────────────────────
+    // â”€â”€ POST /api/auth/register â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && pathname === '/api/auth/register') {
         if (authRateLimit(ip)) return J(429, { error: 'Too many attempts. Try again in a minute.' });
         const { username, email, password } = await parseJSON(req);
@@ -642,7 +642,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(201, { token, user: pub(u) });
     }
 
-    // ── POST /api/auth/login ─────────────────────────────────
+    // â”€â”€ POST /api/auth/login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && pathname === '/api/auth/login') {
         if (authRateLimit(ip)) return J(429, { error: 'Too many attempts. Try again in a minute.' });
         const { email, password } = await parseJSON(req);
@@ -654,7 +654,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { token, user: pub(u) });
     }
 
-    // ── GET /api/auth/me ─────────────────────────────────────
+    // â”€â”€ GET /api/auth/me â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/auth/me') {
         if (!user) return J(401, { error:'Unauthorized' });
         const r = await query('SELECT * FROM users WHERE id=$1', [user.id]);
@@ -662,7 +662,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, pub(r.rows[0]));
     }
 
-    // ── POST /api/auth/change-password ───────────────────────
+    // â”€â”€ POST /api/auth/change-password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && pathname === '/api/auth/change-password') {
         if (!user) return J(401, { error:'Unauthorized' });
         if (authRateLimit(ip)) return J(429, { error:'Too many attempts.' });
@@ -677,7 +677,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true, message:'Password changed successfully' });
     }
 
-    // ── GET /api/stats ───────────────────────────────────────
+    // â”€â”€ GET /api/stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/stats') {
         const songs     = await query('SELECT COUNT(*) FROM songs WHERE approved=TRUE');
         const artists   = await query('SELECT COUNT(DISTINCT artist) FROM songs WHERE approved=TRUE');
@@ -697,7 +697,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
-    // ── GET /api/songs ───────────────────────────────────────
+    // â”€â”€ GET /api/songs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/songs') {
         const q        = parsed.searchParams;
         const category = q.get('category') || 'all';
@@ -724,10 +724,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         const orderMap = { new:'created_at DESC', trending:'play_count DESC', top:'like_count DESC' };
         const order = orderMap[category] || 'created_at DESC';
 
-        // Count query — no ORDER BY
+        // Count query â€” no ORDER BY
         const total = await query(`SELECT COUNT(*) FROM songs ${where}`, params);
 
-        // Data query — with ORDER BY, LIMIT, OFFSET
+        // Data query â€” with ORDER BY, LIMIT, OFFSET
         const dataParams = [...params, limit, offset];
         const songs = await query(
             `SELECT * FROM songs ${where} ORDER BY ${order} LIMIT $${idx} OFFSET $${idx+1}`,
@@ -743,28 +743,28 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
-    // ── GET /api/songs/admin/pending ─────────────────────────
+    // â”€â”€ GET /api/songs/admin/pending â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/songs/admin/pending') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const r = await query(`SELECT s.*, u.username AS uploader_name FROM songs s LEFT JOIN users u ON s.uploaded_by=u.id WHERE s.approved=FALSE ORDER BY s.created_at DESC`);
         return J(200, { songs: r.rows });
     }
 
-    // ── GET /api/songs/admin/users ───────────────────────────
+    // â”€â”€ GET /api/songs/admin/users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/songs/admin/users') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const r = await query('SELECT * FROM users ORDER BY created_at DESC');
         return J(200, { users: r.rows.map(pub) });
     }
 
-    // ── GET /api/songs/likes/mine ────────────────────────────
+    // â”€â”€ GET /api/songs/likes/mine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/songs/likes/mine') {
         if (!user) return J(401, { error:'Unauthorized' });
         const r = await query(`SELECT s.* FROM songs s INNER JOIN likes l ON l.song_id=s.id WHERE l.user_id=$1 AND s.approved=TRUE ORDER BY l.created_at DESC`, [user.id]);
         return J(200, { songs: r.rows.map(s => ({ ...s, liked: true })) });
     }
 
-    // ── GET /api/songs/:id ───────────────────────────────────
+    // â”€â”€ GET /api/songs/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && seg[0]==='songs' && seg[1] && !isNaN(seg[1]) && !seg[2]) {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
         if (!r.rows[0]) return J(404, { error:'Song not found' });
@@ -774,7 +774,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { ...song, play_count: song.play_count + 1 });
     }
 
-    // ── POST /api/songs ──────────────────────────────────────
+    // â”€â”€ POST /api/songs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && pathname === '/api/songs') {
         if (!user) return J(401, { error:'Login required' });
         const ct = req.headers['content-type'] || '';
@@ -810,7 +810,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(201, r.rows[0]);
     }
 
-    // ── POST /api/songs/bulk ─────────────────────────────────
+    // â”€â”€ POST /api/songs/bulk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && pathname === '/api/songs/bulk') {
         if (!user) return J(401, { error:'Login required' });
         const ct = req.headers['content-type'] || '';
@@ -916,7 +916,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
-    // ── DELETE /api/songs/:id ────────────────────────────────
+    // â”€â”€ DELETE /api/songs/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'DELETE' && seg[0]==='songs' && seg[1] && !seg[2]) {
         if (!user) return J(401, { error:'Unauthorized' });
         const r = await query('SELECT * FROM songs WHERE id=$1', [seg[1]]);
@@ -930,7 +930,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         await query('UPDATE songs SET approved=TRUE WHERE id=$1', [seg[1]]);
         
-        // ✨ AUTO-UPDATE SITEMAP
+        // âœ¨ AUTO-UPDATE SITEMAP
         try {
             const songData = await query('SELECT id, title, artist FROM songs WHERE id=$1', [seg[1]]);
             if (songData.rows[0]) {
@@ -945,14 +945,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── PATCH /api/songs/:id/reject ──────────────────────────
+    // â”€â”€ PATCH /api/songs/:id/reject â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='reject') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         await query('UPDATE songs SET approved=FALSE WHERE id=$1', [seg[1]]);
         return J(200, { success:true });
     }
 
-    // ── POST /api/songs/:id/like ─────────────────────────────
+    // â”€â”€ POST /api/songs/:id/like â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && seg[0]==='songs' && seg[2]==='like') {
         if (!user) return J(401, { error:'Login required' });
         const songId = parseInt(seg[1]);
@@ -972,7 +972,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         }
     }
 
-    // ── POST /api/songs/:id/download ─────────────────────────
+    // â”€â”€ POST /api/songs/:id/download â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'POST' && seg[0]==='songs' && seg[2]==='download') {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
         if (!r.rows[0]) return J(404, { error:'Not found' });
@@ -981,7 +981,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── GET /api/songs/:id/download-file ─────────────────────
+    // â”€â”€ GET /api/songs/:id/download-file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Serves file with clean filename (no timestamp)
     if (method === 'GET' && seg[0]==='songs' && seg[2]==='download-file') {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
@@ -993,7 +993,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         // Clean the title and artist for filename
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
         const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'artist';
-        const cleanFilename = `${cleanTitle}_${cleanArtist}_[this_song_downloaded_from_www.Djmusta.com].mp3`;  // 🔥 Full branding!
+        const cleanFilename = `${cleanTitle}_${cleanArtist}_[this_song_downloaded_from_www.Djmusta.com].mp3`;  // ðŸ”¥ Full branding!
         
         // Track download
         await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
@@ -1012,7 +1012,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 res.writeHead(200, {
                     'Content-Type': 'audio/mpeg',
                     'Content-Length': proxyRes.headers['content-length'],
-                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,  // 🔥 This forces clean filename!
+                    'Content-Disposition': `attachment; filename="${cleanFilename}"`,  // ðŸ”¥ This forces clean filename!
                     'Cache-Control': 'public,max-age=3600',
                     ...corsHeaders(origin)
                 });
@@ -1027,7 +1027,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
-    // ── PATCH /api/songs/admin/users/:id/admin ───────────────
+    // â”€â”€ PATCH /api/songs/admin/users/:id/admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'PATCH' && seg[0]==='songs' && seg[1]==='admin' && seg[2]==='users' && seg[4]==='admin') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
@@ -1035,7 +1035,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── PLAYLISTS ────────────────────────────────────────────
+    // â”€â”€ PLAYLISTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // GET /api/playlists - Get user's playlists
     if (method === 'GET' && pathname === '/api/playlists') {
@@ -1097,7 +1097,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── ARTISTS ──────────────────────────────────────────────
+    // â”€â”€ ARTISTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // GET /api/artists - Get all artists
     if (method === 'GET' && pathname === '/api/artists') {
@@ -1130,7 +1130,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── HISTORY & RECOMMENDATIONS ────────────────────────────
+    // â”€â”€ HISTORY & RECOMMENDATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // GET /api/history/recent - Recently played songs
     if (method === 'GET' && pathname === '/api/history/recent') {
@@ -1178,7 +1178,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { songs: r.rows });
     }
 
-    // ── COMMENTS ─────────────────────────────────────────────
+    // â”€â”€ COMMENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // GET /api/songs/:id/comments - Get comments for a song
     if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='comments') {
@@ -1211,7 +1211,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── FOLLOWING ────────────────────────────────────────────
+    // â”€â”€ FOLLOWING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // POST /api/artists/:name/follow - Follow artist
     if (method === 'POST' && seg[0]==='artists' && seg[1] && seg[2]==='follow') {
@@ -1249,7 +1249,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { artists: r.rows.map(x => x.artist_name) });
     }
 
-    // ── NOTIFICATIONS ────────────────────────────────────────
+    // â”€â”€ NOTIFICATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // GET /api/notifications - Get user notifications
     if (method === 'GET' && pathname === '/api/notifications') {
@@ -1272,7 +1272,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── SONG UPDATE (PATCH) ──────────────────────────────────
+    // â”€â”€ SONG UPDATE (PATCH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     
     // PATCH /api/songs/:id - Update song details (admin only)
     if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
@@ -1285,7 +1285,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         return J(200, { success:true });
     }
 
-    // ── USER PROFILE UPDATE ──────────────────────────────────
+    // â”€â”€ USER PROFILE UPDATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // PATCH /api/auth/profile - Update user profile
     if (method === 'PATCH' && pathname === '/api/auth/profile') {
@@ -1309,6 +1309,97 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
+    // â”€â”€ VERIFICATION ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // POST /api/verification/request - Submit verification request
+    if (method === 'POST' && pathname === '/api/verification/request') {
+        if (!user) return J(401, { error:'Unauthorized' });
+        const { artistName, phone, socialLinks, reason } = await parseJSON(req);
+        if (!artistName || !phone || !socialLinks || !reason) 
+            return J(400, { error:'All fields required' });
+        
+        // Check if already verified
+        const userData = await query('SELECT is_verified FROM users WHERE id=$1', [user.id]);
+        if (userData.rows[0]?.is_verified) 
+            return J(400, { error:'You are already verified' });
+        
+        // Check for pending request
+        const existing = await query(
+            'SELECT id FROM verification_requests WHERE user_id=$1 AND status=$2',
+            [user.id, 'pending']
+        );
+        if (existing.rows.length > 0) 
+            return J(400, { error:'You already have a pending verification request' });
+        
+        // Insert request
+        await query(
+            'INSERT INTO verification_requests (user_id, artist_name, phone, social_links, reason, status) VALUES ($1,$2,$3,$4,$5,$6)',
+            [user.id, artistName, phone, socialLinks, reason, 'pending']
+        );
+        
+        return J(201, { success:true, message:'Verification request submitted successfully' });
+    }
+
+    // GET /api/verification/requests - Get all verification requests (ADMIN ONLY)
+    if (method === 'GET' && pathname === '/api/verification/requests') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const r = await query(`
+            SELECT vr.*, u.username, u.email 
+            FROM verification_requests vr 
+            INNER JOIN users u ON vr.user_id=u.id 
+            ORDER BY vr.submitted_at DESC
+        `);
+        return J(200, { requests: r.rows });
+    }
+
+    // POST /api/verification/review/:id - Approve/Reject verification (ADMIN ONLY)
+    if (method === 'POST' && seg[0]==='verification' && seg[1]==='review' && seg[2] && !seg[3]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const requestId = seg[2];
+        const { action, adminNotes } = await parseJSON(req);
+        
+        if (!['approve', 'reject'].includes(action)) 
+            return J(400, { error:'Invalid action. Must be approve or reject' });
+        
+        const request = await query('SELECT * FROM verification_requests WHERE id=$1', [requestId]);
+        if (!request.rows[0]) 
+            return J(404, { error:'Verification request not found' });
+        
+        const status = action === 'approve' ? 'approved' : 'rejected';
+        
+        // Update verification request
+        await query(
+            'UPDATE verification_requests SET status=$1, reviewed_at=NOW(), reviewed_by=$2, admin_notes=$3 WHERE id=$4',
+            [status, user.id, adminNotes || '', requestId]
+        );
+        
+        // If approved, update user's verified status
+        if (action === 'approve') {
+            await query('UPDATE users SET is_verified=TRUE WHERE id=$1', [request.rows[0].user_id]);
+        }
+        
+        return J(200, { success:true, message:`Verification request ${action}d successfully` });
+    }
+
+    // GET /api/verification/status - Get user's verification status
+    if (method === 'GET' && pathname === '/api/verification/status') {
+        if (!user) return J(401, { error:'Unauthorized' });
+        
+        const userData = await query('SELECT is_verified FROM users WHERE id=$1', [user.id]);
+        const isVerified = userData.rows[0]?.is_verified || false;
+        
+        const pendingRequest = await query(
+            'SELECT * FROM verification_requests WHERE user_id=$1 AND status=$2',
+            [user.id, 'pending']
+        );
+        
+        return J(200, {
+            isVerified,
+            hasPendingRequest: pendingRequest.rows.length > 0,
+            request: pendingRequest.rows[0] || null
+        });
+    }
+
     J(404, { error:'Endpoint not found' });
 }
 
@@ -1322,387 +1413,13 @@ function pub(u) {
 // ============================================================
 initDB().then(() => {
     server.listen(PORT, () => {
-        console.log('\n╔══════════════════════════════════════════╗');
-        console.log(`║  🎧  DJ Musta Music Server               ║`);
-        console.log(`║  http://localhost:${PORT}                   ║`);
-        console.log('╚══════════════════════════════════════════╝');
+        console.log('\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
+        console.log(`â•‘  ðŸŽ§  DJ Musta Music Server               â•‘`);
+        console.log(`â•‘  http://localhost:${PORT}                   â•‘`);
+        console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
         console.log(`\n  Admin: musitafahkenny288227@gmail.com / 28822722MUSTA`);
         console.log(`  DB:    Supabase PostgreSQL\n`);
     });
 }).catch(e => {
     console.error('Failed to connect to database:', e.message);
     process.exit(1);
-});
-
-
-// ============================================================
-// MOBILE MONEY PAYMENT ROUTES
-// ============================================================
-
-const mobileMoneyService = require('./mobile-money');
-
-// Get available mobile money networks
-app.get('/api/payments/networks', (req, res) => {
-  const networks = mobileMoneyService.getAvailableNetworks();
-  res.json({ success: true, networks });
-});
-
-// Initiate mobile money payment
-app.post('/api/payments/mobile-money/initiate', authenticate, async (req, res) => {
-  try {
-    const { amount, phone, network, paymentType, metadata } = req.body;
-
-    // Validate inputs
-    if (!amount || !phone || !network) {
-      return res.status(400).json({
-        success: false,
-        error: 'Amount, phone, and network are required'
-      });
-    }
-
-    if (amount < 500) {
-      return res.status(400).json({
-        success: false,
-        error: 'Minimum payment amount is 500 UGX'
-      });
-    }
-
-    // Initiate payment
-    const result = await mobileMoneyService.initiateMobileMoneyPayment({
-      amount,
-      phone,
-      network,
-      email: req.user.email,
-      fullname: req.user.name || 'DJ Musta User',
-      paymentType,
-      metadata: {
-        ...metadata,
-        userId: req.user.id,
-        username: req.user.username
-      }
-    });
-
-    // Store payment in database
-    await pool.query(
-      `INSERT INTO payments (user_id, amount, currency, reference, payment_type, status, network, phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [req.user.id, amount, 'UGX', result.reference, paymentType, 'pending', network, phone]
-    );
-
-    res.json({
-      success: true,
-      message: result.message,
-      reference: result.reference,
-      instructions: `Please approve the payment on your ${network.toUpperCase()} phone`
-    });
-  } catch (error) {
-    console.error('Payment Initiation Error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to initiate payment'
-    });
-  }
-});
-
-// Verify payment status
-app.get('/api/payments/verify/:transactionId', authenticate, async (req, res) => {
-  try {
-    const { transactionId } = req.params;
-
-    const result = await mobileMoneyService.verifyPayment(transactionId);
-
-    if (result.success) {
-      // Update payment status in database
-      await pool.query(
-        `UPDATE payments SET status = $1, paid_at = NOW()
-         WHERE reference = $2`,
-        ['completed', result.reference]
-      );
-
-      // Process payment based on type
-      if (result.paymentType === 'PREMIUM_MONTHLY') {
-        await activatePremium(result.customerEmail, 30);
-      } else if (result.paymentType === 'PREMIUM_YEARLY') {
-        await activatePremium(result.customerEmail, 365);
-      } else if (result.paymentType?.startsWith('ARTIST_TIP')) {
-        await processArtistTip(result);
-      }
-    }
-
-    res.json(result);
-  } catch (error) {
-    console.error('Verification Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to verify payment'
-    });
-  }
-});
-
-// Flutterwave webhook endpoint
-app.post('/api/payments/webhook', async (req, res) => {
-  try {
-    const signature = req.headers['verif-hash'];
-
-    // Verify webhook signature
-    if (!mobileMoneyService.verifyWebhookSignature(signature, req.body)) {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-
-    const result = await mobileMoneyService.processWebhook(req.body);
-
-    if (result.success) {
-      // Update payment in database
-      await pool.query(
-        `UPDATE payments SET status = $1, paid_at = NOW()
-         WHERE reference = $2`,
-        ['completed', result.reference]
-      );
-
-      // Process payment based on type
-      if (result.paymentType === 'PREMIUM_MONTHLY') {
-        await activatePremium(result.email, 30);
-      } else if (result.paymentType === 'PREMIUM_YEARLY') {
-        await activatePremium(result.email, 365);
-      } else if (result.paymentType?.startsWith('ARTIST_TIP')) {
-        await processArtistTip(result);
-      } else if (result.paymentType === 'FEATURED_SONG') {
-        await activateFeaturedSong(result.metadata.songId, 7);
-      }
-
-      // Send success notification
-      await sendPaymentNotification(result.email, result);
-    }
-
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Webhook Error:', error);
-    res.sendStatus(500);
-  }
-});
-
-// Get user's payment history
-app.get('/api/payments/history', authenticate, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT id, amount, currency, payment_type, status, network, phone, 
-              reference, created_at, paid_at
-       FROM payments
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT 50`,
-      [req.user.id]
-    );
-
-    res.json({
-      success: true,
-      payments: result.rows
-    });
-  } catch (error) {
-    console.error('Payment History Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch payment history'
-    });
-  }
-});
-
-// Helper: Activate premium subscription
-async function activatePremium(email, days) {
-  await pool.query(
-    `UPDATE users 
-     SET is_premium = true, 
-         premium_until = NOW() + INTERVAL '${days} days'
-     WHERE email = $1`,
-    [email]
-  );
-  console.log(`✓ Premium activated for ${email} (${days} days)`);
-}
-
-// Helper: Process artist tip
-async function processArtistTip(payment) {
-  const { metadata, amount } = payment;
-  
-  if (metadata.artistId) {
-    await pool.query(
-      `INSERT INTO artist_tips (artist_id, user_id, amount, payment_reference)
-       VALUES ($1, $2, $3, $4)`,
-      [metadata.artistId, metadata.userId, amount, payment.reference]
-    );
-    console.log(`✓ Tip of ${amount} UGX sent to artist ${metadata.artistId}`);
-  }
-}
-
-// Helper: Activate featured song
-async function activateFeaturedSong(songId, days) {
-  await pool.query(
-    `UPDATE songs 
-     SET is_featured = true,
-         featured_until = NOW() + INTERVAL '${days} days'
-     WHERE id = $1`,
-    [songId]
-  );
-  console.log(`✓ Song ${songId} featured for ${days} days`);
-}
-
-// Helper: Send payment notification
-async function sendPaymentNotification(email, payment) {
-  // Send email notification
-  console.log(`✓ Payment notification sent to ${email}`);
-  // TODO: Implement email service
-}
-
-
-// ============================================================
-// ARTIST VERIFICATION ENDPOINTS
-// ============================================================
-
-// Submit verification request
-app.post('/api/verification/request', authenticate, async (req, res) => {
-  try {
-    const user = req.user;
-    const { artist_name, phone, social_links, reason } = req.body;
-
-    if (!artist_name || !phone || !social_links || !reason) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    // Check if user already has a pending request
-    const existing = await query(
-      'SELECT * FROM verification_requests WHERE user_id = $1 AND status = $2',
-      [user.id, 'pending']
-    );
-
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ 
-        error: 'You already have a pending verification request' 
-      });
-    }
-
-    // Insert verification request
-    const result = await query(
-      `INSERT INTO verification_requests 
-       (user_id, artist_name, phone, social_links, reason) 
-       VALUES ($1, $2, $3, $4, $5) 
-       RETURNING *`,
-      [user.id, artist_name, phone, social_links, reason]
-    );
-
-    res.json({ 
-      success: true, 
-      message: 'Verification request submitted successfully',
-      request: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Verification request error:', error);
-    res.status(500).json({ error: 'Failed to submit verification request' });
-  }
-});
-
-// Get all verification requests (ADMIN ONLY)
-app.get('/api/verification/requests', authenticate, async (req, res) => {
-  try {
-    const user = req.user;
-    
-    // Check if user is admin
-    const userCheck = await query('SELECT is_admin FROM users WHERE id = $1', [user.id]);
-    if (!userCheck.rows[0]?.is_admin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const status = req.query.status || 'pending';
-    const result = await query(
-      `SELECT v.*, u.username, u.email 
-       FROM verification_requests v 
-       JOIN users u ON v.user_id = u.id 
-       WHERE v.status = $1 
-       ORDER BY v.submitted_at DESC`,
-      [status]
-    );
-
-    res.json({ requests: result.rows });
-  } catch (error) {
-    console.error('Get verification requests error:', error);
-    res.status(500).json({ error: 'Failed to fetch verification requests' });
-  }
-});
-
-// Approve/Reject verification request (ADMIN ONLY)
-app.post('/api/verification/review/:id', authenticate, async (req, res) => {
-  try {
-    const user = req.user;
-    const { id } = req.params;
-    const { action, notes } = req.body; // action: 'approve' or 'reject'
-
-    // Check if user is admin
-    const userCheck = await query('SELECT is_admin FROM users WHERE id = $1', [user.id]);
-    if (!userCheck.rows[0]?.is_admin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    if (action !== 'approve' && action !== 'reject') {
-      return res.status(400).json({ error: 'Invalid action' });
-    }
-
-    // Get verification request
-    const request = await query(
-      'SELECT * FROM verification_requests WHERE id = $1',
-      [id]
-    );
-
-    if (request.rows.length === 0) {
-      return res.status(404).json({ error: 'Verification request not found' });
-    }
-
-    const verifyRequest = request.rows[0];
-
-    // Update verification request status
-    await query(
-      `UPDATE verification_requests 
-       SET status = $1, reviewed_at = NOW(), reviewed_by = $2, admin_notes = $3 
-       WHERE id = $4`,
-      [action === 'approve' ? 'approved' : 'rejected', user.id, notes || '', id]
-    );
-
-    // If approved, update user's verified status
-    if (action === 'approve') {
-      await query(
-        'UPDATE users SET is_verified = TRUE WHERE id = $1',
-        [verifyRequest.user_id]
-      );
-    }
-
-    res.json({ 
-      success: true, 
-      message: `Verification request ${action}d successfully` 
-    });
-  } catch (error) {
-    console.error('Review verification error:', error);
-    res.status(500).json({ error: 'Failed to review verification request' });
-  }
-});
-
-// Get user's verification status
-app.get('/api/verification/status', authenticate, async (req, res) => {
-  try {
-    const user = req.user;
-    
-    const result = await query(
-      `SELECT status, submitted_at, reviewed_at, admin_notes 
-       FROM verification_requests 
-       WHERE user_id = $1 
-       ORDER BY submitted_at DESC 
-       LIMIT 1`,
-      [user.id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json({ status: 'none' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Get verification status error:', error);
-    res.status(500).json({ error: 'Failed to fetch verification status' });
-  }
-});
