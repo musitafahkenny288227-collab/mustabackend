@@ -1462,6 +1462,18 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
+    // DELETE /api/verification/requests/:id - Delete verification request (ADMIN ONLY)
+    if (method === 'DELETE' && seg[0]==='verification' && seg[1]==='requests' && seg[2] && !seg[3]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const requestId = seg[2];
+        
+        const request = await query('SELECT * FROM verification_requests WHERE id=$1', [requestId]);
+        if (!request.rows[0]) return J(404, { error:'Verification request not found' });
+        
+        await query('DELETE FROM verification_requests WHERE id=$1', [requestId]);
+        return J(200, { success:true, message:'Verification request deleted' });
+    }
+
     J(404, { error:'Endpoint not found' });
 }
 
