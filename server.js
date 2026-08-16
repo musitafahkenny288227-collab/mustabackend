@@ -353,6 +353,7 @@ async function initDB() {
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_since TIMESTAMPTZ');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_note TEXT');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE');
         console.log('✅ User columns updated');
     } catch(e) {
         console.log('⚠️ Column update skipped');
@@ -899,7 +900,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         // Data query â€” with ORDER BY, LIMIT, OFFSET
         const dataParams = [...params, limit, offset];
         const songs = await query(
-            `SELECT * FROM songs ${where} ORDER BY ${order} LIMIT $${idx} OFFSET $${idx+1}`,
+            `SELECT s.*, COALESCE(vr.status,'none') as uploader_verified FROM songs s LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved' WHERE ${where.replace("WHERE ","")} ORDER BY ${order} LIMIT $${idx} OFFSET $${idx+1}`,
             dataParams
         );
 
@@ -1842,9 +1843,68 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         });
     }
 
+    // GET /api/artist/stats - Artist's own song statistics
+    if (method === 'GET' && pathname === '/api/artist/stats') {
+        if (!user) return J(401, { error:'Login required' });
+        const r = await query(`
+            SELECT s.id, s.title, s.artist, s.cover_path, s.play_count, s.download_count, s.like_count, s.created_at, s.approved
+            FROM songs s WHERE s.uploaded_by=$1 ORDER BY s.play_count DESC
+        `, [user.id]);
+        const totals = r.rows.reduce((acc, s) => ({
+            plays: acc.plays + (s.play_count||0),
+            downloads: acc.downloads + (s.download_count||0),
+            likes: acc.likes + (s.like_count||0)
+        }), {plays:0, downloads:0, likes:0});
+        return J(200, { songs: r.rows, totals });
+    }
+
+    // GET /api/songs/featured - Get featured/promoted songs
+    if (method === 'GET' && pathname === '/api/songs/featured') {
+        const r = await query(`SELECT s.* FROM songs s WHERE s.approved=TRUE AND s.is_featured=TRUE ORDER BY s.created_at DESC LIMIT 10`);
+        return J(200, { songs: r.rows });
+    }
+
+    // PATCH /api/songs/:id/feature - Toggle featured (admin)
+    if (method === 'PATCH' && seg[0]==='songs' && seg[1] && seg[2]==='feature') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const { featured } = await parseJSON(req);
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE');
+        await query('UPDATE songs SET is_featured=$1 WHERE id=$2', [!!featured, seg[1]]);
+        return J(200, { success:true });
+    }
+
+    // PATCH /api/songs/:id/cover - Update song cover image (admin)
+    if (method === 'PATCH' && seg[0]==='songs' && seg[1] && seg[2]==='cover') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        try {
+            const { fields, files } = await parseMultipart(req);
+            const cover = files['cover'];
+            if (!cover) return J(400, { error:'No cover image uploaded' });
+            if (cover.data.length > 5 * 1024 * 1024) return J(400, { error:'Image too large. Max 5MB.' });
+            let coverPath;
+            try { coverPath = await r2Upload(cover, 'covers'); }
+            catch(e) { coverPath = saveLocal(cover, 'covers'); }
+            await query('UPDATE songs SET cover_path=$1 WHERE id=$2', [coverPath, seg[1]]);
+            return J(200, { success:true, coverPath });
+        } catch(err) {
+            return J(500, { error:'Cover update failed: ' + err.message });
+        }
+    }
+
+    // GET /api/songs/new-this-week - Songs from last 7 days
+    if (method === 'GET' && pathname === '/api/songs/new-this-week') {
+        const r = await query(`
+            SELECT s.*, COALESCE(vr.status,'none') as verified_status
+            FROM songs s
+            LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved'
+            WHERE s.approved=TRUE AND s.created_at > NOW() - INTERVAL '7 days'
+            ORDER BY s.created_at DESC LIMIT 20
+        `);
+        return J(200, { songs: r.rows });
+    }
+
     J(404, { error:'Endpoint not found' });
 }
-
 // Public user object
 function pub(u) {
     return { 
