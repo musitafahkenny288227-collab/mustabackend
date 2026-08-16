@@ -707,6 +707,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     // POST /api/auth/login - DISABLED (Google only)
     if (method === 'POST' && pathname === '/api/auth/login') {
         return J(403, { error:'Login is only allowed via Google. Please use Google Sign-In.' });
+    }
 
     // â”€â”€ GET /api/auth/me â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (method === 'GET' && pathname === '/api/auth/me') {
