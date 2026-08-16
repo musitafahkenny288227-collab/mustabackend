@@ -1423,3 +1423,4 @@ initDB().then(() => {
 }).catch(e => {
     console.error('Failed to connect to database:', e.message);
     process.exit(1);
+});
