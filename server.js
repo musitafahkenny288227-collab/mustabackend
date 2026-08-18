@@ -1370,12 +1370,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     if (method === 'PATCH' && seg[0]==='artists' && seg[1] && !seg[2]) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const artistName = decodeURIComponent(seg[1]);
-        const { bio, photoUrl } = await parseJSON(req);
+        const { bio, photoUrl, instagram, twitter, facebook } = await parseJSON(req);
         const existing = await query('SELECT id FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
         if (existing.rows.length) {
-            await query('UPDATE artists SET bio=$1, photo_url=$2 WHERE LOWER(name)=LOWER($3)', [bio||'', photoUrl||null, artistName]);
+            await query('UPDATE artists SET bio=$1, photo_url=$2, instagram=$3, twitter=$4, facebook=$5 WHERE LOWER(name)=LOWER($6)',
+                [bio||'', photoUrl||null, instagram||'', twitter||'', facebook||'', artistName]);
         } else {
-            await query('INSERT INTO artists (name,bio,photo_url) VALUES ($1,$2,$3)', [artistName, bio||'', photoUrl||null]);
+            await query('INSERT INTO artists (name,bio,photo_url,instagram,twitter,facebook) VALUES ($1,$2,$3,$4,$5,$6)',
+                [artistName, bio||'', photoUrl||null, instagram||'', twitter||'', facebook||'']);
         }
         return J(200, { success:true });
     }
