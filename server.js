@@ -692,6 +692,36 @@ const server = http.createServer(async (req, res) => {
         return serveStatic(req, res, path.join(__dirname, pathname), origin);
     }
 
+    // Dynamic sitemap.xml
+    if (pathname === '/sitemap.xml') {
+        try {
+            const songs = await query('SELECT id, title, artist, created_at FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
+            const urls = songs.rows.map(s => {
+                const slug = encodeURIComponent(s.title.toLowerCase().replace(/\s+/g,'-'));
+                return `  <url>
+    <loc>https://djmusta.com?song=${s.id}</loc>
+    <lastmod>${new Date(s.created_at).toISOString().split('T')[0]}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>`;
+            }).join('\n');
+            const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://djmusta.com</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+${urls}
+</urlset>`;
+            res.writeHead(200, { 'Content-Type':'application/xml', 'Cache-Control':'public,max-age=3600', ...corsHeaders(origin) });
+            return res.end(xml);
+        } catch(e) {
+            res.writeHead(500); return res.end('Sitemap error');
+        }
+    }
+
     serveStatic(req, res, path.join(__dirname, '..', pathname === '/' ? 'index.html' : pathname), origin);
 });
 
