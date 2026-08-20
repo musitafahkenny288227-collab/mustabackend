@@ -60,18 +60,27 @@ async function sendEmail(to, subject, html) {
 // CONFIG
 // ============================================================
 const PORT         = process.env.PORT || 5000;
-const JWT_SECRET   = process.env.JWT_SECRET || 'djmusta_secret_2026';
-const FRONTEND_URL = process.env.FRONTEND_URL || '*';
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_6BkZsUCnzt5P@ep-blue-wildflower-axfofbmw.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require';
+const JWT_SECRET   = process.env.JWT_SECRET;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://djmusta.com';
+const DATABASE_URL = process.env.DATABASE_URL;
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '4fb9c546cc898314c24d358bb3360f92';
-const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY || '39a9cb99d771c9e24a8395047397161f';
-const R2_SECRET_KEY = process.env.R2_SECRET_KEY || 'bb14b1dc7a838036ecb6fb8fcfd3e171c510e371618c65cc27071865506d9050';
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY;
+const R2_SECRET_KEY = process.env.R2_SECRET_KEY;
 const R2_BUCKET     = process.env.R2_BUCKET     || 'djmusta-music';
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || 'https://pub-1004f9c2790e44689198e9849c00fb9b.r2.dev';
 const R2_ENDPOINT   = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 const UPLOADS = path.join(__dirname, 'uploads');
+
+// Validate required environment variables on startup
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL', 'R2_ACCOUNT_ID', 'R2_ACCESS_KEY', 'R2_SECRET_KEY'];
+const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missingEnv.length > 0) {
+    console.error('❌ MISSING REQUIRED ENV VARS:', missingEnv.join(', '));
+    console.error('Set these in Render → Environment → Add Environment Variable');
+    process.exit(1);
+}
 
 // ============================================================
 // SITEMAP UPDATER
@@ -139,30 +148,136 @@ setInterval(() => {
 function authRateLimit(ip) { return rateLimit(ip + ':auth', 10, 60000); }
 
 // ============================================================
-// FILE TYPE VALIDATION
+// FILE TYPE VALIDATION — Magic Byte + Extension + MIME
 // ============================================================
-const ALLOWED_AUDIO = ['audio/mpeg','audio/mp3','audio/wav','audio/wave','audio/x-wav','audio/mp4','audio/m4a','audio/x-m4a'];
-const ALLOWED_IMAGE = ['image/jpeg','image/jpg','image/png','image/webp','image/gif'];
-const ALLOWED_AUDIO_EXT = ['.mp3','.wav','.m4a'];
-const ALLOWED_IMAGE_EXT = ['.jpg','.jpeg','.png','.webp','.gif'];
+
+// Strictly blocked dangerous extensions — reject immediately regardless of MIME
+const BLOCKED_EXTENSIONS = new Set([
+    '.exe','.bat','.cmd','.com','.sh','.bash','.zsh','.fish',
+    '.ps1','.psm1','.psd1','.vbs','.vbe','.js','.jse','.wsf',
+    '.wsh','.msi','.msp','.scr','.hta','.cpl','.dll','.so',
+    '.php','.php3','.php4','.php5','.phtml','.asp','.aspx',
+    '.jsp','.cfm','.pl','.py','.rb','.lua','.jar','.class',
+    '.elf','.bin','.run','.deb','.rpm','.apk','.dmg','.iso'
+]);
+
+// Allowed MIME types
+const ALLOWED_AUDIO_MIME = new Set([
+    'audio/mpeg','audio/mp3','audio/wav','audio/wave',
+    'audio/x-wav','audio/mp4','audio/m4a','audio/x-m4a'
+]);
+const ALLOWED_IMAGE_MIME = new Set([
+    'image/jpeg','image/jpg','image/png','image/webp','image/gif'
+]);
+
+// Allowed extensions
+const ALLOWED_AUDIO_EXT = new Set(['.mp3','.wav','.m4a']);
+const ALLOWED_IMAGE_EXT = new Set(['.jpg','.jpeg','.png','.webp','.gif']);
+
+// Magic bytes — actual file signatures read from binary content
+function getMagicType(buf) {
+    if (!buf || buf.length < 4) return null;
+
+    // MP3: ID3 tag or MPEG sync
+    if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return 'mp3'; // ID3
+    if (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) return 'mp3';           // MPEG sync
+
+    // WAV: RIFF....WAVE
+    if (buf[0]===0x52 && buf[1]===0x49 && buf[2]===0x46 && buf[3]===0x46 &&
+        buf[8]===0x57 && buf[9]===0x41 && buf[10]===0x56 && buf[11]===0x45) return 'wav';
+
+    // M4A / MP4: ftyp box
+    if (buf[4]===0x66 && buf[5]===0x74 && buf[6]===0x79 && buf[7]===0x70) return 'm4a';
+
+    // JPEG: FF D8 FF
+    if (buf[0]===0xFF && buf[1]===0xD8 && buf[2]===0xFF) return 'jpeg';
+
+    // PNG: 89 50 4E 47
+    if (buf[0]===0x89 && buf[1]===0x50 && buf[2]===0x4E && buf[3]===0x47) return 'png';
+
+    // GIF: GIF87a or GIF89a
+    if (buf[0]===0x47 && buf[1]===0x49 && buf[2]===0x46) return 'gif';
+
+    // WEBP: RIFF....WEBP
+    if (buf[0]===0x52 && buf[1]===0x49 && buf[2]===0x46 && buf[3]===0x46 &&
+        buf[8]===0x57 && buf[9]===0x45 && buf[10]===0x42 && buf[11]===0x50) return 'webp';
+
+    // EXE / DLL: MZ header
+    if (buf[0]===0x4D && buf[1]===0x5A) return 'exe';
+
+    // ELF (Linux binary)
+    if (buf[0]===0x7F && buf[1]===0x45 && buf[2]===0x4C && buf[3]===0x46) return 'elf';
+
+    // ZIP / JAR / APK (PK header)
+    if (buf[0]===0x50 && buf[1]===0x4B) return 'zip';
+
+    // PDF
+    if (buf[0]===0x25 && buf[1]===0x50 && buf[2]===0x44 && buf[3]===0x46) return 'pdf';
+
+    return 'unknown';
+}
+
+const AUDIO_MAGIC = new Set(['mp3','wav','m4a']);
+const IMAGE_MAGIC = new Set(['jpeg','png','gif','webp']);
+const DANGEROUS_MAGIC = new Set(['exe','elf','zip']);
 
 function validateFile(fileObj, type) {
     if (!fileObj) return null;
-    const ext  = path.extname(fileObj.filename).toLowerCase();
-    const mime = fileObj.mimetype.toLowerCase();
-    if (type === 'audio') {
-        if (!ALLOWED_AUDIO.includes(mime) && !ALLOWED_AUDIO_EXT.includes(ext))
-            return 'Invalid audio file. Only MP3, WAV, M4A allowed.';
-    } else if (type === 'image') {
-        if (!ALLOWED_IMAGE.includes(mime) && !ALLOWED_IMAGE_EXT.includes(ext))
-            return 'Invalid image file. Only JPG, PNG, WEBP allowed.';
+
+    const ext  = path.extname(fileObj.filename || '').toLowerCase();
+    const mime = (fileObj.mimetype || '').toLowerCase();
+    const buf  = fileObj.data; // Buffer
+
+    // 1. Block dangerous extensions immediately
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+        console.warn(`[Security] Blocked dangerous extension: ${ext} from file: ${fileObj.filename}`);
+        return `File type not allowed. Extension "${ext}" is blocked for security reasons.`;
     }
-    // Check file size: audio max 50MB, image max 5MB
+
+    // 2. Check magic bytes (actual file content)
+    const magic = getMagicType(buf);
+
+    // Block known malware signatures regardless of claimed type
+    if (DANGEROUS_MAGIC.has(magic)) {
+        console.warn(`[Security] Blocked malicious file content (magic: ${magic}) from: ${fileObj.filename}`);
+        return 'File content detected as malicious. Upload rejected.';
+    }
+
+    if (type === 'audio') {
+        // 3. Extension must be allowed
+        if (!ALLOWED_AUDIO_EXT.has(ext))
+            return `Invalid audio extension "${ext}". Only .mp3 and .wav allowed.`;
+
+        // 4. MIME type must be allowed
+        if (!ALLOWED_AUDIO_MIME.has(mime))
+            return `Invalid audio type "${mime}". Only MP3 and WAV allowed.`;
+
+        // 5. Magic bytes must match audio
+        if (!AUDIO_MAGIC.has(magic))
+            return `File content does not match an audio file. Upload rejected.`;
+
+    } else if (type === 'image') {
+        // 3. Extension must be allowed
+        if (!ALLOWED_IMAGE_EXT.has(ext))
+            return `Invalid image extension "${ext}". Only .jpg, .png, .webp allowed.`;
+
+        // 4. MIME type must be allowed
+        if (!ALLOWED_IMAGE_MIME.has(mime))
+            return `Invalid image type "${mime}". Only JPG, PNG, WEBP, GIF allowed.`;
+
+        // 5. Magic bytes must match image
+        if (!IMAGE_MAGIC.has(magic))
+            return `File content does not match an image. Upload rejected.`;
+    }
+
+    // 6. File size check: audio max 50MB, image max 5MB
     const maxSize = type === 'audio' ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
-    if (fileObj.data.length > maxSize)
+    if (buf.length > maxSize)
         return `File too large. Max ${type === 'audio' ? '50MB' : '5MB'}.`;
-    return null;
+
+    return null; // All checks passed
 }
+
 
 // ============================================================
 // DATABASE
