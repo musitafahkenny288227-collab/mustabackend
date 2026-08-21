@@ -613,10 +613,14 @@ function jsonRes(res, status, data, origin) {
 function readBody(req) {
     return new Promise((resolve, reject) => {
         const chunks = [];
+        let finished = false;
         req.on('data', c => chunks.push(c));
-        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('end', () => { finished = true; resolve(Buffer.concat(chunks)); });
         req.on('error', reject);
-        setTimeout(() => resolve(Buffer.concat(chunks)), 60000);
+        // Timeout only if stream never finishes (stalled connection)
+        setTimeout(() => {
+            if (!finished) reject(new Error('Request body timeout'));
+        }, 120000);
     });
 }
 
@@ -664,6 +668,9 @@ function parseMultipart(req) {
                 const fieldName = nameMatch[1];
                 if (fileMatch && fileMatch[1]) {
                     files[fieldName] = { filename: fileMatch[1], mimetype: mimeMatch ? mimeMatch[1].trim() : 'application/octet-stream', data: partData };
+                } else if (mimeMatch) {
+                    // Blob with no filename but has Content-Type — treat as file
+                    files[fieldName] = { filename: fieldName + '.bin', mimetype: mimeMatch[1].trim(), data: partData };
                 } else {
                     fields[fieldName] = partData.toString('utf8');
                 }
