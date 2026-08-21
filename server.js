@@ -1713,7 +1713,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             const dataUrl = `data:${photo.mimetype};base64,${base64}`;
 
             await query('UPDATE users SET profile_photo=$1 WHERE id=$2', [dataUrl, user.id]);
-            return J(200, { success:true, photoUrl: dataUrl });
+            // Return only success — don't send the full base64 back (too large)
+            return J(200, { success: true });
         } catch(err) {
             console.error('[Profile Photo] Error:', err);
             return J(500, { error:'Upload failed: ' + err.message });
