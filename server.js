@@ -1353,6 +1353,41 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     }
 
     // â”€â”€ GET /api/songs/:id/download-file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── GET /api/songs/:id/stream ──────────────────────────────────
+    // Proxies audio from R2 through the backend with CORS headers
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='stream') {
+        const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
+        if (!r.rows[0]) return J(404, { error:'Not found' });
+        const song = r.rows[0];
+        const fileUrl = song.file_path;
+        if (!fileUrl) return J(404, { error:'No file' });
+
+        return new Promise((resolve) => {
+            const reqHeaders = { 'User-Agent': 'DJMusta/1.0' };
+            if (req.headers.range) reqHeaders['Range'] = req.headers.range;
+            const client = fileUrl.startsWith('https:') ? https : http;
+            const proxyReq = client.get(fileUrl, { headers: reqHeaders }, (proxyRes) => {
+                const status = proxyRes.statusCode || 200;
+                const resHeaders = {
+                    'Content-Type': proxyRes.headers['content-type'] || 'audio/mpeg',
+                    'Accept-Ranges': 'bytes',
+                    'Cache-Control': 'public,max-age=3600',
+                    ...corsHeaders(origin)
+                };
+                if (proxyRes.headers['content-length']) resHeaders['Content-Length'] = proxyRes.headers['content-length'];
+                if (proxyRes.headers['content-range']) resHeaders['Content-Range'] = proxyRes.headers['content-range'];
+                res.writeHead(status, resHeaders);
+                proxyRes.pipe(res);
+                proxyRes.on('end', resolve);
+            });
+            proxyReq.on('error', (err) => {
+                console.error('[Stream error]', err.message);
+                if (!res.headersSent) { res.writeHead(500, corsHeaders(origin)); res.end(); }
+                resolve();
+            });
+        });
+    }
+
     // Serves file with clean filename (no timestamp)
     if (method === 'GET' && seg[0]==='songs' && seg[2]==='download-file') {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
