@@ -1138,9 +1138,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             filePath  = await r2Upload(files.song,  'songs');
             coverPath = files.cover ? await r2Upload(files.cover, 'covers') : null;
         } catch(e) {
-            console.error('[R2 failed, using local]', e.message);
-            filePath  = saveLocal(files.song,  'songs');
-            coverPath = files.cover ? saveLocal(files.cover, 'covers') : null;
+            console.error('[R2 upload failed]', e.message);
+            return J(500, { error: 'File upload failed: ' + e.message + '. Please check R2 configuration.' });
         }
 
         const r = await query(
@@ -1221,9 +1220,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                     filePath = await r2Upload(songFile, 'songs');
                     coverPath = coverFile ? await r2Upload(coverFile, 'covers') : null;
                 } catch(e) {
-                    console.error('[R2 failed for bulk upload, using local]', e.message);
-                    filePath = saveLocal(songFile, 'songs');
-                    coverPath = coverFile ? saveLocal(coverFile, 'covers') : null;
+                    console.error('[R2 bulk upload failed]', e.message);
+                    errors.push({ index: i, filename: songFile.filename, error: 'R2 upload failed: ' + e.message });
+                    continue;
                 }
                 
                 // Insert into database
