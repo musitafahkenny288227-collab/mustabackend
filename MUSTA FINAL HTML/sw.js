@@ -1,4 +1,4 @@
-const CACHE = 'djmusta-v6';
+const CACHE = 'djmusta-v7';
 const STATIC = [
   '/',
   '/index.html',
