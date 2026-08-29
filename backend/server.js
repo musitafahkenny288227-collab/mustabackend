@@ -1169,9 +1169,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         }
 
         let filePath, coverPath;
+        const DEFAULT_COVER_URL = `${R2_PUBLIC_URL}/covers/default-cover.svg`;
         try {
             filePath  = await r2Upload(files.song,  'songs');
-            coverPath = files.cover ? await r2Upload(files.cover, 'covers') : null;
+            coverPath = files.cover ? await r2Upload(files.cover, 'covers') : DEFAULT_COVER_URL;
         } catch(e) {
             console.error('[R2 upload failed]', e.message);
             return J(500, { error: 'File upload failed: ' + e.message + '. Please check R2 configuration.' });
@@ -1251,9 +1252,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 
                 // Upload files
                 let filePath, coverPath;
+                const DEFAULT_COVER_URL = `${R2_PUBLIC_URL}/covers/default-cover.svg`;
                 try {
                     filePath = await r2Upload(songFile, 'songs');
-                    coverPath = coverFile ? await r2Upload(coverFile, 'covers') : null;
+                    coverPath = coverFile ? await r2Upload(coverFile, 'covers') : DEFAULT_COVER_URL;
                 } catch(e) {
                     console.error('[R2 bulk upload failed]', e.message);
                     errors.push({ index: i, filename: songFile.filename, error: 'R2 upload failed: ' + e.message });
@@ -1299,6 +1301,27 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (!user.isAdmin && song.uploaded_by !== user.id) return J(403, { error:'Forbidden' });
         await query('DELETE FROM songs WHERE id=$1', [seg[1]]);
         return J(200, { success:true });
+    }
+
+    // ── POST /api/songs/bulk-delete ────────────────────────────────
+    // Admin only — delete up to 100 songs in a single DB query
+    if (method === 'POST' && seg[0]==='songs' && seg[1]==='bulk-delete') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const body = await parseJSON(req);
+        const ids  = body.ids;
+        if (!Array.isArray(ids) || !ids.length) return J(400, { error:'ids array required' });
+        if (ids.length > 100) return J(400, { error:'Max 100 songs per bulk delete' });
+        // Validate all values are integers to prevent injection
+        const safeIds = ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+        if (!safeIds.length) return J(400, { error:'No valid song IDs provided' });
+        // Delete all in one query using = ANY($1)
+        const result = await query(
+            'DELETE FROM songs WHERE id = ANY($1::int[]) RETURNING id',
+            [safeIds]
+        );
+        const deleted = result.rows.length;
+        console.log(`[Bulk Delete] Admin ${user.id} deleted ${deleted} songs: ${safeIds.join(', ')}`);
+        return J(200, { success: true, deleted });
     }
     if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='approve') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
@@ -1398,6 +1421,58 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         if (!fileUrl) return J(404, { error:'No file' });
         console.log(`[Stream] Song #${song.id}: "${song.title}" | URL: ${fileUrl.substring(0, 60)}...`);
 
+        // Helper: get content-type from file path string
+        function getAudioContentType(filePath) {
+            const p = filePath.toLowerCase();
+            if (p.endsWith('.wav') || p.endsWith('.wave')) return 'audio/wav';
+            if (p.endsWith('.m4a') || p.endsWith('.m4b'))  return 'audio/mp4';
+            if (p.endsWith('.ogg') || p.endsWith('.oga'))  return 'audio/ogg';
+            if (p.endsWith('.webm'))                        return 'audio/webm';
+            if (p.endsWith('.flac'))                        return 'audio/flac';
+            if (p.endsWith('.aac'))                         return 'audio/aac';
+            return 'audio/mpeg'; // default for .mp3 and unknown
+        }
+
+        // Handle local file paths (legacy uploads stored on disk)
+        if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+            const localPath = fileUrl.startsWith('/')
+                ? path.join(__dirname, '..', fileUrl)
+                : path.join(__dirname, fileUrl);
+            console.log(`[Stream] Local file path: ${localPath}`);
+            if (!fs.existsSync(localPath)) {
+                console.error(`[Stream] Local file not found: ${localPath}`);
+                return J(404, { error: 'Audio file not found. It may have been stored on an old server.' });
+            }
+            const stat = fs.statSync(localPath);
+            const contentType = getAudioContentType(localPath);
+            const rangeHeader = req.headers.range;
+            if (rangeHeader) {
+                const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-');
+                const start = parseInt(startStr, 10);
+                const end   = endStr ? parseInt(endStr, 10) : stat.size - 1;
+                const chunkSize = (end - start) + 1;
+                res.writeHead(206, {
+                    'Content-Type': contentType,
+                    'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': chunkSize,
+                    'Cache-Control': 'public,max-age=3600',
+                    ...corsHeaders(origin)
+                });
+                fs.createReadStream(localPath, { start, end }).pipe(res);
+            } else {
+                res.writeHead(200, {
+                    'Content-Type': contentType,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': stat.size,
+                    'Cache-Control': 'public,max-age=3600',
+                    ...corsHeaders(origin)
+                });
+                fs.createReadStream(localPath).pipe(res);
+            }
+            return;
+        }
+
         return new Promise((resolve) => {
             const reqHeaders = { 'User-Agent': 'DJMusta/1.0' };
             if (req.headers.range) reqHeaders['Range'] = req.headers.range;
@@ -1407,26 +1482,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 
                 // Determine correct Content-Type based on file extension
                 const urlPath = new URL(fileUrl).pathname.toLowerCase();
-                let contentType = 'audio/mpeg'; // default
-                if (urlPath.endsWith('.wav') || urlPath.endsWith('.wave')) {
-                    contentType = 'audio/wav';
-                } else if (urlPath.endsWith('.m4a') || urlPath.endsWith('.m4b')) {
-                    contentType = 'audio/mp4';
-                } else if (urlPath.endsWith('.ogg') || urlPath.endsWith('.oga')) {
-                    contentType = 'audio/ogg';
-                } else if (urlPath.endsWith('.webm')) {
-                    contentType = 'audio/webm';
-                } else if (urlPath.endsWith('.flac')) {
-                    contentType = 'audio/flac';
-                } else if (urlPath.endsWith('.aac')) {
-                    contentType = 'audio/aac';
-                } else if (!urlPath.endsWith('.mp3')) {
-                    // If no extension matches, try R2's content-type if it's audio
+                let contentType = getAudioContentType(urlPath);
+                // If unknown extension, try R2's content-type if it's audio
+                if (contentType === 'audio/mpeg' && !urlPath.endsWith('.mp3')) {
                     if (proxyRes.headers['content-type']?.startsWith('audio/')) {
                         contentType = proxyRes.headers['content-type'];
                     }
                 }
-                // mp3 stays as default audio/mpeg
                 
                 console.log(`[Stream] File: ${urlPath} | R2 Content-Type: ${proxyRes.headers['content-type']} | Serving as: ${contentType} | Status: ${status} | Size: ${proxyRes.headers['content-length']} bytes`);
                 const resHeaders = {
@@ -1436,7 +1498,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                     ...corsHeaders(origin)
                 };
                 if (proxyRes.headers['content-length']) resHeaders['Content-Length'] = proxyRes.headers['content-length'];
-                if (proxyRes.headers['content-range']) resHeaders['Content-Range'] = proxyRes.headers['content-range'];
+                if (proxyRes.headers['content-range'])  resHeaders['Content-Range']  = proxyRes.headers['content-range'];
                 res.writeHead(status, resHeaders);
                 proxyRes.pipe(res);
                 proxyRes.on('end', resolve);

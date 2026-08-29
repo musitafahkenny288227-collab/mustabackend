@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "DJ Musta Music Platform - Backend API",
   "main": "server.js",
+  "type": "commonjs",
   "engines": {
     "node": "22.14.0"
   },

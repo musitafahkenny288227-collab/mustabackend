@@ -3267,7 +3267,7 @@
       <!-- LEFT: Large cover art -->
       <div style="position:relative;flex-shrink:0;width:90px;height:90px;background:#1a1a3e;overflow:hidden">
         <img id="playerCover" src="" style="width:100%;height:100%;object-fit:cover;display:block"
-          onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'" />
+          onerror="this.onerror=null;this.src=DEFAULT_COVER" />
         <!-- Play/Pause overlay on cover -->
         <button id="playPauseBtn" onclick="togglePlay()" aria-label="Play or pause song" title="Play or pause"
           style="position:absolute;inset:0;width:100%;height:100%;background:rgba(0,0,0,0.35);color:white;font-size:28px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s"
@@ -5638,26 +5638,16 @@
     let audio = new Audio();
     audio.volume = 0.8;
     
-    // Audio error handler with comprehensive diagnostics
+    // Audio error handler — codes 2 & 4 are handled by playSong() retry logic
     audio.addEventListener('error', (e) => {
-        const errorCodes = {
-            1: 'MEDIA_ERR_ABORTED - Playback was aborted',
-            2: 'MEDIA_ERR_NETWORK - Network error occurred (check internet connection)',
-            3: 'MEDIA_ERR_DECODE - Decoding failed (file might be corrupted)',
-            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Audio format not supported by your browser'
-        };
-        const code = audio.error?.code || 'UNKNOWN';
-        const errorMsg = errorCodes[code] || `Unknown error (code: ${code})`;
-        console.error('🔴 Audio Error:', {
-            code: code,
-            message: errorMsg,
-            src: audio.src,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            currentTime: audio.currentTime,
-            duration: audio.duration
-        });
-        showToast(`Audio Error: ${errorMsg}`, '❌');
+        const code = audio.error?.code;
+        console.error('🔴 Audio Error code:', code, 'src:', audio.src);
+        // Codes 2 (network) and 4 (src not supported) trigger the retry in playSong()
+        // so we suppress the toast here to avoid showing two messages.
+        if (code !== 2 && code !== 4) {
+            const msgs = { 1: 'Playback was aborted', 3: 'Audio file could not be decoded' };
+            showToast(msgs[code] || 'Playback error', '⚠️');
+        }
     });
     
     // Also log when audio loading starts
@@ -5989,8 +5979,10 @@
     function artistHasName(artist, name) {
       return splitArtistNames(artist).some(item => item.toLowerCase() === String(name).trim().toLowerCase());
     }
+    const DEFAULT_COVER = 'https://pub-1004f9c2790e44689198e9849c00fb9b.r2.dev/covers/default-cover.svg';
+
     function imgSrc(p) {
-      if (!p) return 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>';
+      if (!p) return DEFAULT_COVER;
       if (p.startsWith('data:')) return p;  // base64
       if (p.startsWith('http')) return p;   // full URL
       if (p.startsWith('/')) return API + p; // relative path
@@ -6150,7 +6142,7 @@
         g.innerHTML += list.map((s, i) => `
       <div class="music-card${playIndex === songs.indexOf(s) && audio.src ? ' playing' : ''}" id="card-${s.id}">
         <div class="card-img-wrap">
-          <img src="${imgSrc(s.cover_path)}" alt="${esc(s.title)}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+          <img src="${imgSrc(s.cover_path)}" alt="${esc(s.title)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
           <div class="card-overlay">
             <button class="ov-btn" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
             <button class="ov-btn dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
@@ -6176,7 +6168,7 @@
         g.innerHTML += list.map((s, i) => `
       <div class="song-row${playIndex === songs.indexOf(s) && audio.src ? ' playing' : ''}" id="row-${s.id}">
         <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${songs.indexOf(s) + 1}</div>
-        <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+        <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="playSong(${s.id})">${esc(s.title)}</div>
           <a href="${artistPath(s.artist)}" onclick="event.stopPropagation()" style="display:block;font-size:12px;color:var(--muted);text-decoration:none">${esc(formatArtistNames(s.artist))}</a>
@@ -6751,13 +6743,9 @@
       currentSongData = s;
       playIndex = songs.indexOf(s);
       
-      // Use backend streaming endpoint for better CORS/compatibility
-      // Falls back to direct file_path if it's already a playable URL
-      const streamUrl = s.file_path?.startsWith('/api/') 
-        ? `https://mustabackend-nenb.onrender.com${s.file_path}`
-        : s.file_path?.startsWith('http')
-        ? s.file_path
-        : `https://mustabackend-nenb.onrender.com/api/songs/${id}/stream`;
+      // Always proxy through backend — direct R2 URLs have no CORS headers
+      // and will fail in browsers with crossOrigin='anonymous' set
+      const streamUrl = `https://mustabackend-nenb.onrender.com/api/songs/${id}/stream`;
       
       console.log('🔗 Using stream URL:', streamUrl);
       console.log('🔊 Audio element state before load:', { 
@@ -6770,13 +6758,11 @@
       });
       console.log('📁 Original file_path from DB:', s.file_path);
       
-      // Clear any previous errors
+      // Clear any previous errors and reset crossOrigin
+      audio.removeAttribute('crossorigin');
       audio.src = '';
       
-      // Set crossorigin for CORS
-      audio.crossOrigin = 'anonymous';
-      
-      // Now set the new source
+      // Now set the new source (backend proxy handles CORS, no crossOrigin needed)
       audio.src = streamUrl;
       audio.load(); // Explicitly load the media
       
@@ -6788,9 +6774,29 @@
         error: audio.error
       });
       
-      audio.play().catch((err) => { 
+      // Try to play; if it fails due to network/server cold-start, retry once
+      audio.play().catch(async (err) => {
         console.error('❌ Play error:', err.message, err);
-        showToast('Could not play song: ' + err.message, '⚠️');
+        // MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) or MEDIA_ERR_NETWORK (code 2) can
+        // both mean the Render server was sleeping. Wake it up and retry once.
+        const errCode = audio.error?.code;
+        if (errCode === 4 || errCode === 2 || err.name === 'NotSupportedError') {
+          showToast('Server waking up... retrying in 5s ☕', '⏳');
+          // Ping health endpoint to wake Render
+          fetch('https://mustabackend-nenb.onrender.com/api/health').catch(() => {});
+          await new Promise(r => setTimeout(r, 6000));
+          // Re-set src and retry
+          audio.removeAttribute('crossorigin');
+          audio.src = '';
+          audio.src = streamUrl;
+          audio.load();
+          audio.play().catch((err2) => {
+            console.error('❌ Retry failed:', err2.message);
+            showToast('Could not play song. Please try again in a moment.', '⚠️');
+          });
+        } else {
+          showToast('Could not play song: ' + err.message, '⚠️');
+        }
       });
       
       console.log('✓ Called audio.play()');
@@ -6975,7 +6981,7 @@
         el.innerHTML = liked.map((s, i) => `
       <div class="song-row" onclick="playSong(${s.id})">
         <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${i + 1}</div>
-        <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+        <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
           <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ❤️ ${s.like_count || 0}</div>
@@ -7002,36 +7008,96 @@
       document.getElementById('totalTime').textContent = fmt(audio.duration);
     });
     audio.addEventListener('error', (e) => {
-      const errorMap = {
-        'MEDIA_ERR_ABORTED': 'Playback was aborted',
-        'MEDIA_ERR_NETWORK': 'Network error - server may be down',
-        'MEDIA_ERR_DECODE': 'Audio file could not be decoded',
-        'MEDIA_ERR_SRC_NOT_SUPPORTED': 'Audio format not supported'
-      };
-      const errorName = Object.keys(errorMap)[audio.error?.code - 1] || `Error code ${audio.error?.code}`;
-      const errorMsg = errorMap[errorName] || 'Unknown playback error';
-      console.error('🔴 Audio error:', errorName, errorMsg, 'URL was:', audio.src);
-      showToast(errorMsg + ' (' + errorName + ')', '⚠️');
+      const code = audio.error?.code;
+      // Code 2 = network error (server down/sleeping), Code 4 = src not supported
+      if (code === 2 || code === 4) {
+        // Don't show error if a retry is already in progress (play().catch handles it)
+        console.error('🔴 Audio error code:', code, 'URL:', audio.src);
+      } else {
+        const errorMap = {
+          'MEDIA_ERR_ABORTED': 'Playback was aborted',
+          'MEDIA_ERR_NETWORK': 'Network error - retrying...',
+          'MEDIA_ERR_DECODE': 'Audio file could not be decoded',
+          'MEDIA_ERR_SRC_NOT_SUPPORTED': 'Audio format not supported'
+        };
+        const errorName = Object.keys(errorMap)[code - 1] || `Error code ${code}`;
+        const errorMsg = errorMap[errorName] || 'Unknown playback error';
+        console.error('🔴 Audio error:', errorName, errorMsg, 'URL was:', audio.src);
+        showToast(errorMsg, '⚠️');
+      }
     });
     // ended handled by shuffle/repeat logic above
 
     async function addArtworkWatermark(imageBuffer) {
       const image = await createImageBitmap(new Blob([imageBuffer]));
       const canvas = document.createElement('canvas');
-      canvas.width = image.width;
-      canvas.height = image.height;
-      const context = canvas.getContext('2d');
-      context.drawImage(image, 0, 0);
+      // Ensure minimum size for quality
+      canvas.width  = Math.max(image.width,  500);
+      canvas.height = Math.max(image.height, 500);
+      const ctx = canvas.getContext('2d');
 
-      const bannerHeight = Math.max(70, Math.round(canvas.height * 0.16));
-      context.fillStyle = 'rgba(0, 0, 0, 0.72)';
-      context.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
-      context.fillStyle = '#ffffff';
-      context.font = `700 ${Math.max(24, Math.round(canvas.width * 0.045))}px Arial, sans-serif`;
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText('www.djmusta.com', canvas.width / 2, canvas.height - bannerHeight / 2);
+      // Draw original image scaled to fill canvas
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
       image.close();
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // ── Diagonal tiled watermark (subtle, across whole image) ──
+      ctx.save();
+      ctx.globalAlpha = 0.10;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.round(w * 0.045)}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const tileText = 'www.djmusta.com';
+      const tileW = w * 0.6;
+      const tileH = h * 0.25;
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(-Math.PI / 6);
+      for (let row = -3; row <= 3; row++) {
+        for (let col = -2; col <= 2; col++) {
+          ctx.fillText(tileText, col * tileW, row * tileH);
+        }
+      }
+      ctx.restore();
+
+      // ── Bottom banner ──────────────────────────────────────────
+      const bannerH = Math.max(64, Math.round(h * 0.15));
+
+      // Gradient banner background
+      const grad = ctx.createLinearGradient(0, h - bannerH, 0, h);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.3, 'rgba(10,5,30,0.85)');
+      grad.addColorStop(1,   'rgba(10,5,30,0.97)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, h - bannerH, w, bannerH);
+
+      // Purple accent line at top of banner
+      const accentGrad = ctx.createLinearGradient(0, 0, w, 0);
+      accentGrad.addColorStop(0,   '#a855f7');
+      accentGrad.addColorStop(0.5, '#ec4899');
+      accentGrad.addColorStop(1,   '#a855f7');
+      ctx.fillStyle = accentGrad;
+      ctx.fillRect(0, h - bannerH, w, Math.max(3, Math.round(h * 0.006)));
+
+      // Main URL text
+      const mainFontSize = Math.max(18, Math.round(w * 0.055));
+      ctx.font = `900 ${mainFontSize}px Arial Black, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Purple shadow
+      ctx.shadowColor = '#a855f7';
+      ctx.shadowBlur  = Math.round(w * 0.015);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('www.djmusta.com', w / 2, h - bannerH * 0.48);
+      ctx.shadowBlur = 0;
+
+      // Subtitle text
+      const subFontSize = Math.max(10, Math.round(w * 0.028));
+      ctx.font = `${subFontSize}px Arial, sans-serif`;
+      ctx.fillStyle = 'rgba(168,85,247,0.85)';
+      ctx.fillText('Uganda\'s #1 Music Platform', w / 2, h - bannerH * 0.15);
 
       const watermarkedBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
       if (!watermarkedBlob) throw new Error('Could not create watermarked artwork');
@@ -7041,15 +7107,15 @@
     async function downloadSong(id, title, url) {
       const backendUrl = 'https://mustabackend-nenb.onrender.com/api/songs/' + id + '/download-file';
       const song = songs.find(item => String(item.id) === String(id)) || playableSongCatalog.get(String(id));
-      const coverSource = song?.cover_path || song?.cover_image || song?.coverImage || song?.cover;
+      const coverSource = song?.cover_path || song?.cover_image || song?.coverImage || song?.cover || DEFAULT_COVER;
       const downloadName = `${title} - ${song?.artist || 'DJ Musta'} - Downloaded from DJ Musta.mp3`
         .replace(/[\\/:*?"<>|]/g, '-');
 
       console.log('📥 downloadSong called:', { id, title, url, song, coverSource, backendUrl });
       showToast('Downloading ' + title, '⬇️');
       try {
-        if (!window.ID3Writer || !coverSource) {
-          throw new Error('Cover or tag writer unavailable: ID3Writer=' + (!!window.ID3Writer) + ', cover=' + !!coverSource);
+        if (!window.ID3Writer) {
+          throw new Error('ID3 tag writer not available');
         }
         const coverUrl = imgSrc(coverSource);
         const coverProxyUrl = 'https://images.weserv.nl/?url=' + encodeURIComponent(coverUrl);
@@ -7274,7 +7340,7 @@
         g.innerHTML = d.songs.length ? d.songs.map(s => `
       <div class="music-card" id="card-${s.id}">
         <div class="card-img-wrap">
-          <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+          <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
           <div class="card-overlay">
             <button class="ov-btn" onclick="playSong(${s.id})">▶</button>
             <button class="ov-btn dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
@@ -7350,7 +7416,7 @@
         document.getElementById('playlistDetailSongs').innerHTML = d.songs.map((s, i) => `
       <div class="song-row" id="prow-${s.id}">
         <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${i + 1}</div>
-        <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+        <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14px" onclick="playSong(${s.id})">${esc(s.title)}</div>
           <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
@@ -7449,7 +7515,7 @@
       el.innerHTML = h.map((s, i) => `
     <div class="song-row">
       <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${i + 1}</div>
-      <img src="${imgSrc(s.cover)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+      <img src="${imgSrc(s.cover)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
         <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
@@ -7475,7 +7541,7 @@
         ${songs.map((s, i) => `
           <div onclick="playSongById(${s.id})" style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--card);border-radius:10px;margin-bottom:8px;cursor:pointer">
             <div style="font-size:20px;font-weight:900;color:${i < 3 ? '#f59e0b' : 'var(--muted)'};width:32px;text-align:center;flex-shrink:0">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1)}</div>
-            <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+            <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
               <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
@@ -7510,11 +7576,13 @@
     // ============================================================
     // UPLOAD
     // ============================================================
-    function onAudioSelected(input) {
+    async function onAudioSelected(input) {
       if (!input.files[0]) return;
-      document.getElementById('audioFileName').textContent = input.files[0].name;
-      // Auto-detect duration from MP3
-      const url = URL.createObjectURL(input.files[0]);
+      const file = input.files[0];
+      document.getElementById('audioFileName').textContent = file.name;
+
+      // Auto-detect duration
+      const url = URL.createObjectURL(file);
       const tmpAudio = new Audio(url);
       tmpAudio.addEventListener('loadedmetadata', () => {
         const mins = Math.floor(tmpAudio.duration / 60);
@@ -7522,6 +7590,28 @@
         document.getElementById('upDuration').value = `${mins}:${String(secs).padStart(2, '0')}`;
         URL.revokeObjectURL(url);
       });
+
+      // Auto-fill title & artist from ID3 tags
+      try {
+        const meta = await readBulkId3Metadata(file);
+        const titleField  = document.getElementById('upTitle');
+        const artistField = document.getElementById('upArtist');
+        if (meta.title  && !titleField.value.trim())  {
+          titleField.value  = meta.title;
+          titleField.style.borderColor = 'var(--pink)';
+          setTimeout(() => titleField.style.borderColor  = '', 2000);
+        }
+        if (meta.artist && !artistField.value.trim()) {
+          artistField.value = meta.artist;
+          artistField.style.borderColor = 'var(--pink)';
+          setTimeout(() => artistField.style.borderColor = '', 2000);
+        }
+        if (meta.title || meta.artist) {
+          showToast('Song info auto-filled from file tags ✨', '🎵');
+        }
+      } catch(e) {
+        console.log('Could not read ID3 tags:', e.message);
+      }
     }
     function onCoverSelected(input) {
       if (input.files[0]) {
@@ -7629,7 +7719,7 @@
           if (frameId === 'TPE1') artist = value;
           offset += 10 + frameSize;
         }
-        return { title: title || fallback.title, artist: artist || fallback.artist };
+        return { title: title || fallback.title, artist: artist || fallback.artist, fromTags: !!(title || artist) };
       } catch (error) {
         return fallback;
       }
@@ -7707,6 +7797,24 @@
         document.getElementById('bulkTitles').value = metadata.map(item => item.title).join(', ');
         document.getElementById('bulkArtists').value = metadata.map(item => item.artist).join(', ');
         renderBulkMetadataPreview(bulkAudioFiles.map((file, index) => ({ ...metadata[index], file: file.name, duration: '' })));
+
+        // Count how many had real ID3 tags vs just filename fallback
+        const fromTags = metadata.filter(m => m.fromTags).length;
+        const fromName = metadata.length - fromTags;
+
+        // Highlight fields briefly
+        ['bulkTitles', 'bulkArtists'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { el.style.borderColor = 'var(--pink)'; setTimeout(() => el.style.borderColor = '', 2000); }
+        });
+
+        if (fromTags > 0 && fromName === 0) {
+          showToast(`All ${fromTags} songs auto-filled from ID3 tags ✨`, '🎵');
+        } else if (fromTags > 0) {
+          showToast(`${fromTags} from ID3 tags, ${fromName} from filename ✨`, '🎵');
+        } else {
+          showToast(`Titles filled from filenames — check and edit if needed`, 'ℹ️');
+        }
       });
       list.innerHTML = `
     <div style="background:var(--bg);padding:12px;border-radius:8px">
@@ -8015,10 +8123,10 @@
             : String(a.title || '').localeCompare(String(b.title || '')));
           document.getElementById('adminPendingCount').textContent = list.length;
           if (!list.length) { c.innerHTML = '<p style="color:var(--muted);padding:20px">No pending songs.</p>'; return; }
-          c.innerHTML = `<div class="admin-bulk-bar"><div class="admin-bulk-tools"><span><b id="adminSelectedCount">0</b> selected</span><select class="admin-filter-select" onchange="loadAdminTab('pending', document.querySelector('.admin-tab[data-admin-tab=\'pending\']'))" id="adminPendingSort" aria-label="Sort pending songs"><option value="title" ${pendingSort === 'title' ? 'selected' : ''}>Title A-Z</option><option value="newest" ${pendingSort === 'newest' ? 'selected' : ''}>Newest first</option></select></div><button onclick="adminBulkAction('approve')">Approve selected</button></div>` + list.map(s => `
+          c.innerHTML = `<div class="admin-bulk-bar"><div class="admin-bulk-tools"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;font-size:13px"><input type="checkbox" id="adminSelectAll" onchange="adminToggleSelectAll(this)" style="width:16px;height:16px;accent-color:var(--pink);cursor:pointer" /> Select All</label><span style="color:var(--muted);font-size:13px"><b id="adminSelectedCount">0</b> selected</span><select class="admin-filter-select" onchange="loadAdminTab('pending', document.querySelector('.admin-tab[data-admin-tab=\'pending\']'))" id="adminPendingSort" aria-label="Sort pending songs"><option value="title" ${pendingSort === 'title' ? 'selected' : ''}>Title A-Z</option><option value="newest" ${pendingSort === 'newest' ? 'selected' : ''}>Newest first</option></select></div><div style="display:flex;gap:8px"><button onclick="adminBulkAction('approve')" style="background:#22c55e">✓ Approve Selected</button><button onclick="adminBulkAction('delete')" style="background:#ef4444">🗑 Delete Selected</button></div></div>` + list.map(s => `
         <div class="admin-action-row" style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px">
           <input class="admin-select" type="checkbox" value="${s.id}" onchange="updateAdminSelection()" aria-label="Select ${esc(s.title)}" />
-          <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+          <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
             <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')} • by ${esc(s.uploader_name || 'unknown')}</div>
@@ -8042,10 +8150,10 @@
               : new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0));
           document.getElementById('adminApprovedCount').textContent = list.length;
           if (!list.length) { c.innerHTML = '<p style="color:var(--muted);padding:20px">No songs.</p>'; return; }
-          c.innerHTML = `<div class="admin-bulk-bar"><div class="admin-bulk-tools"><span><b id="adminSelectedCount">0</b> selected</span><select class="admin-filter-select" id="adminGenreFilter" onchange="loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab=\'approved\']'))" aria-label="Filter approved songs by genre"><option value="all">All genres</option>${genres.map(genre => `<option value="${esc(genre)}" ${genre === selectedGenre ? 'selected' : ''}>${esc(genre)}</option>`).join('')}</select><select class="admin-filter-select" id="adminApprovedSort" onchange="loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab=\'approved\']'))" aria-label="Sort approved songs"><option value="newest" ${selectedSort === 'newest' ? 'selected' : ''}>Newest first</option><option value="plays" ${selectedSort === 'plays' ? 'selected' : ''}>Most played</option><option value="title" ${selectedSort === 'title' ? 'selected' : ''}>Title A-Z</option></select></div><button onclick="adminBulkAction('delete')">Delete selected</button></div>` + list.map(s => `
+          c.innerHTML = `<div class="admin-bulk-bar"><div class="admin-bulk-tools"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;font-size:13px"><input type="checkbox" id="adminSelectAll" onchange="adminToggleSelectAll(this)" style="width:16px;height:16px;accent-color:var(--pink);cursor:pointer" /> Select All</label><span style="color:var(--muted);font-size:13px"><b id="adminSelectedCount">0</b> selected</span><select class="admin-filter-select" id="adminGenreFilter" onchange="loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab=\'approved\']'))" aria-label="Filter approved songs by genre"><option value="all">All genres</option>${genres.map(genre => `<option value="${esc(genre)}" ${genre === selectedGenre ? 'selected' : ''}>${esc(genre)}</option>`).join('')}</select><select class="admin-filter-select" id="adminApprovedSort" onchange="loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab=\'approved\']'))" aria-label="Sort approved songs"><option value="newest" ${selectedSort === 'newest' ? 'selected' : ''}>Newest first</option><option value="plays" ${selectedSort === 'plays' ? 'selected' : ''}>Most played</option><option value="title" ${selectedSort === 'title' ? 'selected' : ''}>Title A-Z</option></select></div><button onclick="adminBulkAction('delete')" style="background:#ef4444">🗑 Delete Selected</button></div>` + list.map(s => `
         <div class="admin-action-row" style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px">
           <input class="admin-select" type="checkbox" value="${s.id}" onchange="updateAdminSelection()" aria-label="Select ${esc(s.title)}" />
-          <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+          <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
             <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')} • ▶ ${s.play_count || 0}</div>
@@ -8088,7 +8196,7 @@
           <div id="featuredList" style="margin-bottom:20px;">
             ${featuredSongs.length ? featuredSongs.map(s => `
               <div class="admin-action-row" style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;border:2px solid #f59e0b;">
-                <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+                <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
                 <div style="flex:1;min-width:0">
                   <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
                   <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')} • ▶ ${s.play_count || 0}</div>
@@ -8107,7 +8215,7 @@
               <div id="searchResults" style="max-height:300px;overflow-y:auto;">
                 ${allSongs.filter(s => !s.is_featured).slice(0, 10).map(s => `
                   <div class="admin-action-row" style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;">
-                    <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+                    <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
                     <div style="flex:1;min-width:0">
                       <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
                       <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')} • ▶ ${s.play_count || 0}</div>
@@ -8223,28 +8331,69 @@
     let currentAdminTab = 'overview';
     let adminSearchDebounce;
 
+    function adminToggleSelectAll(checkbox) {
+      document.querySelectorAll('#adminContent .admin-select').forEach(cb => cb.checked = checkbox.checked);
+      updateAdminSelection();
+    }
+
     function updateAdminSelection() {
-      const selected = document.querySelectorAll('#adminContent .admin-select:checked').length;
+      const all  = document.querySelectorAll('#adminContent .admin-select');
+      const checked = document.querySelectorAll('#adminContent .admin-select:checked');
       const counter = document.getElementById('adminSelectedCount');
-      if (counter) counter.textContent = selected;
+      if (counter) counter.textContent = checked.length;
+      // Keep "Select All" checkbox in sync
+      const selectAll = document.getElementById('adminSelectAll');
+      if (selectAll) {
+        selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+        selectAll.checked = all.length > 0 && checked.length === all.length;
+      }
     }
 
     async function adminBulkAction(action) {
-      const ids = [...document.querySelectorAll('#adminContent .admin-select:checked')].map(input => input.value);
-      if (!ids.length) {
-        showToast('Select at least one song first', 'ℹ️');
-        return;
+      const ids = [...document.querySelectorAll('#adminContent .admin-select:checked')].map(cb => cb.value);
+      if (!ids.length) { showToast('Select at least one song first', 'ℹ️'); return; }
+
+      const isDelete  = action === 'delete';
+      const label     = isDelete ? 'Delete' : 'Approve';
+      const count     = ids.length;
+
+      if (!confirm(`${label} ${count} selected song${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+
+      // Show progress
+      showToast(`${label}ing 0 / ${count}...`, isDelete ? '🗑️' : '✅');
+
+      if (isDelete) {
+        // Use bulk endpoint — single DB query for up to 20+ songs
+        try {
+          const result = await api('/songs/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+          });
+          showToast(`${result.deleted || count} song${count === 1 ? '' : 's'} deleted ✓`, '🗑️');
+        } catch (e) {
+          showToast(e.message || 'Bulk delete failed', '❌');
+          return;
+        }
+      } else {
+        // Approve one by one (no bulk approve endpoint yet)
+        let done = 0;
+        for (const id of ids) {
+          try {
+            await api(`/songs/${id}/approve`, { method: 'PATCH' });
+            done++;
+            showToast(`Approving ${done} / ${count}...`, '✅');
+          } catch (e) {
+            showToast(`Failed on song #${id}: ${e.message}`, '❌');
+          }
+        }
+        showToast(`${done} song${done === 1 ? '' : 's'} approved ✓`, '✅');
       }
-      const verb = action === 'approve' ? 'approve' : 'delete';
-      if (!confirm(`${verb === 'approve' ? 'Approve' : 'Delete'} ${ids.length} selected song${ids.length === 1 ? '' : 's'}?`)) return;
-      try {
-        await Promise.all(ids.map(id => api(action === 'approve' ? `/songs/${id}/approve` : `/songs/${id}`, { method: action === 'approve' ? 'PATCH' : 'DELETE' })));
-        showToast(`${ids.length} song${ids.length === 1 ? '' : 's'} ${action === 'approve' ? 'approved' : 'deleted'}`, '✅');
-        loadAdminTab(action === 'approve' ? 'pending' : 'approved', document.querySelector(`.admin-tab[data-admin-tab="${action === 'approve' ? 'pending' : 'approved'}"]`));
-        loadSongs(true);
-      } catch (e) {
-        showToast(e.message || 'Bulk action failed', '❌');
-      }
+
+      // Refresh the relevant tab
+      const tabName = isDelete ? 'approved' : 'pending';
+      loadAdminTab(tabName, document.querySelector(`.admin-tab[data-admin-tab="${tabName}"]`));
+      loadSongs(true);
     }
 
     async function performAdminSearch(query) {
@@ -8284,7 +8433,7 @@
 
             c.innerHTML = songs.map(s => `
           <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px">
-            <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+            <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
               <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')} • ▶ ${s.play_count || 0}</div>
@@ -8731,7 +8880,7 @@
         wrap.innerHTML = `<div style="font-weight:700;margin-bottom:12px;font-size:14px">🎵 More like this</div>` +
           related.map(s => `
         <div onclick="closeModal('songDetailModal');playSong(${s.id})" style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg);border-radius:8px;margin-bottom:6px;cursor:pointer">
-          <img src="${imgSrc(s.cover_path)}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+          <img src="${imgSrc(s.cover_path)}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
             <div style="font-size:11px;color:var(--muted)">${esc(s.artist)}</div>
@@ -9120,7 +9269,7 @@
           }
           c.innerHTML = songs.map(s => `
         <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;cursor:pointer" onclick="playSongById(${s.id})">
-          <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+          <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
             <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ▶ ${s.play_count || 0} • ❤️ ${s.like_count || 0}</div>
@@ -9140,7 +9289,7 @@
             }
             c.innerHTML = likedSongs.map(s => `
           <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;cursor:pointer" onclick="playSongById(${s.id})">
-            <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+            <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
               <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')}</div>
@@ -9262,7 +9411,7 @@
 
         resultsDiv.innerHTML = filtered.slice(0, 20).map(s => `
       <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;">
-        <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+        <img src="${imgSrc(s.cover_path)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
           <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.genre || '')} • ▶ ${s.play_count || 0}</div>
@@ -9334,7 +9483,7 @@
           nwGrid.innerHTML = newSongs.slice(0, 6).map(s => `
         <div class="music-card" id="card-nw-${s.id}" onclick="openSongDetail(${s.id})">
           <div class="card-img-wrap">
-            <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+            <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
             <div class="card-overlay">
               <button class="ov-btn" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
               <button class="ov-btn dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
@@ -9372,7 +9521,7 @@
           ftGrid.innerHTML = featured.map(s => `
         <div class="music-card" onclick="openSongDetail(${s.id})">
           <div class="card-img-wrap">
-            <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+            <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
             <div class="card-overlay">
               <button class="ov-btn" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
               <button class="ov-btn dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
@@ -9445,7 +9594,7 @@
       grid.innerHTML = songs.map(s => `
     <div class="music-card" id="card-${gridId}-${s.id}" onclick="openSongDetail(${s.id})">
       <div class="card-img-wrap">
-        <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+        <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
         <div class="card-overlay">
           <button class="ov-btn" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
           <button class="ov-btn dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
@@ -9536,7 +9685,7 @@
         list.innerHTML = songs.map((s, i) => `
       <div onclick="playSong(${s.id})" style="display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:10px 14px;border:1px solid ${i < 3 ? rankColors[i] + '33' : 'var(--border)'};cursor:pointer;transition:all .2s" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform=''">
         <div style="min-width:34px;height:34px;border-radius:8px;background:${i < 3 ? rankColors[i] : 'var(--border)'};display:flex;align-items:center;justify-content:center;font-size:${i < 3 ? '18px' : '14px'};font-weight:900;color:white;flex-shrink:0">${i < 3 ? rankIcons[i] : i + 1}</div>
-        <img src="${imgSrc(s.cover_path)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+        <img src="${imgSrc(s.cover_path)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
           <div style="font-size:11px;color:var(--muted)">${esc(s.artist)} · ▶ ${(s.play_count || 0).toLocaleString()} plays</div>
@@ -10454,7 +10603,7 @@
     if (!queue.length) { list.innerHTML = '<p style="color:var(--muted);padding:16px;text-align:center">Queue is empty</p>'; return; }
     list.innerHTML = queue.map((s, i) => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:var(--bg);margin-bottom:6px">
-      <img src="${imgSrc(s.cover_path)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%231a1a3e%22/></svg>'"/>
+      <img src="${imgSrc(s.cover_path)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
         <div style="font-size:11px;color:var(--muted)">${esc(s.artist)}</div>
