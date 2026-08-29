@@ -840,6 +840,11 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Direct health check endpoint
+    if (pathname === '/health') {
+        return jsonRes(res, 200, { status:'ok', uptime: process.uptime() }, origin);
+    }
+
     if (pathname.startsWith('/uploads/')) {
         return serveStatic(req, res, path.join(__dirname, pathname), origin);
     }

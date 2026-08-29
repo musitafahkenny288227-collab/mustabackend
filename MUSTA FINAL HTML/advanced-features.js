@@ -539,7 +539,7 @@ window.audioEnhancer = new AudioEnhancer();
 // 8. MULTI-LANGUAGE SUPPORT
 // ============================================================
 
-const translations = {
+const uiTranslations = {
     en: {
         home: 'Home',
         search: 'Search songs, artists...',
@@ -592,7 +592,7 @@ window.changeLanguage = function(lang) {
 };
 
 window.t = function(key) {
-    return translations[window.currentLanguage][key] || translations.en[key] || key;
+    return uiTranslations[window.currentLanguage][key] || uiTranslations.en[key] || key;
 };
 
 // Language selector
