@@ -1,0 +1,15 @@
+# Force custom domain (redirect pages.dev to djmusta.com)
+https://djmusta.pages.dev/* https://djmusta.com/:splat 301
+
+# Song pretty URLs — serve index.html so song-router.js can handle them
+/song/* /index.html 200
+
+# Sub-pages — serve their own HTML
+/gospel /gospel.html 200
+/nonstops /nonstops.html 200
+/top-songs /top-songs.html 200
+/top-artists /top-artists.html 200
+/new-music /new-music.html 200
+
+# Fallback — all other paths serve index.html (SPA)
+/* /index.html 200

@@ -1,0 +1,21 @@
+{
+  "name": "djmusta-backend",
+  "version": "1.0.0",
+  "description": "DJ Musta Music Platform - Backend API",
+  "main": "server.js",
+  "engines": {
+    "node": "22.14.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "axios": "^1.19.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "nodemailer": "^9.0.5",
+    "pg": "^8.11.3",
+    "web-push": "^3.6.7"
+  }
+}

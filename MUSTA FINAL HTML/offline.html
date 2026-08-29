@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You're Offline | DJ Musta</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{min-height:100vh;background:linear-gradient(135deg,#0a0e27,#1a1f3a,#2d1b4e);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:white;text-align:center;padding:20px}
+    .container{max-width:480px}
+    .emoji{font-size:80px;margin-bottom:24px;display:block;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    h1{font-size:36px;font-weight:900;margin-bottom:12px;background:linear-gradient(135deg,#a855f7,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    p{font-size:16px;color:rgba(255,255,255,0.6);margin-bottom:32px;line-height:1.7}
+    .btn{display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#a855f7,#3b82f6);color:white;text-decoration:none;border-radius:50px;font-weight:700;font-size:16px;cursor:pointer;border:none;transition:opacity .2s}
+    .btn:hover{opacity:.85}
+    .tip{margin-top:24px;font-size:13px;color:rgba(255,255,255,0.35);line-height:1.6}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="emoji">📶</span>
+    <h1>You're Offline</h1>
+    <p>No internet connection detected.<br>Check your connection and try again.<br>Previously played songs may still be available.</p>
+    <button class="btn" onclick="window.location.reload()">🔄 Try Again</button>
+    <p class="tip">DJ Musta caches music for offline listening.<br>Songs you've played before will still work.</p>
+  </div>
+</body>
+</html>

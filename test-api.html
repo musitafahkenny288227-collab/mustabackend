@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .result { background: #2a2a2a; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+        pre { overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🎵 API Diagnostic Test</h1>
+    <div id="output"></div>
+
+    <script>
+        async function test() {
+            const output = document.getElementById('output');
+            
+            async function log(msg, data = null) {
+                let html = `<div class="result"><strong>${msg}</strong>`;
+                if (data) html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                html += '</div>';
+                output.innerHTML += html;
+                console.log(msg, data);
+            }
+
+            try {
+                await log('✓ Testing: GET /api/songs');
+                const res = await fetch('https://mustabackend-nenb.onrender.com/api/songs?limit=5&offset=0&category=all');
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+
+                const data = await res.json();
+                await log('<span class="success">✓ API Response (first 5 songs):</span>', {
+                    total: data.total,
+                    returned: data.songs?.length,
+                    firstSongKeys: data.songs?.[0] ? Object.keys(data.songs[0]) : [],
+                    firstSong: data.songs?.[0]
+                });
+
+                if (data.songs?.length > 0) {
+                    const song = data.songs[0];
+                    await log('<span class="success">✓ Song data structure:</span>', {
+                        id: song.id,
+                        title: song.title,
+                        artist: song.artist,
+                        file_path: song.file_path ? '(exists)' : '❌ MISSING',
+                        cover_path: song.cover_path ? '(exists)' : '❌ MISSING',
+                        approved: song.approved,
+                        play_count: song.play_count,
+                        download_count: song.download_count,
+                    });
+
+                    if (!song.file_path) {
+                        await log('<span class="error">❌ ERROR: file_path is missing from song! Songs won\'t play.</span>');
+                    } else {
+                        await log('<span class="success">✓ file_path exists. Testing if URL is accessible...</span>');
+                        
+                        try {
+                            const fileTest = await fetch(song.file_path, { method: 'HEAD', mode: 'no-cors' });
+                            await log(`<span class="success">✓ File URL accessible: ${song.file_path}</span>`);
+                        } catch (e) {
+                            await log(`<span class="error">❌ File URL may not be accessible: ${song.file_path}</span><pre>${e.message}</pre>`);
+                        }
+                    }
+                }
+            } catch (error) {
+                await log(`<span class="error">❌ Error: ${error.message}</span>`);
+            }
+
+            // Test stream endpoint
+            try {
+                await log('✓ Testing: GET /api/songs/:id/stream (if song exists)');
+                const res = await fetch('https://mustabackend-nenb.onrender.com/api/songs?limit=1&offset=0&category=all');
+                const data = await res.json();
+                if (data.songs?.[0]) {
+                    const songId = data.songs[0].id;
+                    const streamRes = await fetch(`https://mustabackend-nenb.onrender.com/api/songs/${songId}/stream`, { mode: 'no-cors' });
+                    await log(`<span class="success">✓ Stream endpoint responds for song ${songId}</span>`);
+                }
+            } catch (e) {
+                await log(`<span class="error">❌ Stream endpoint error: ${e.message}</span>`);
+            }
+        }
+
+        test();
+    </script>
+</body>
+</html>
