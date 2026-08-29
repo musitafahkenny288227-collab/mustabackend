@@ -1399,12 +1399,31 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             const client = fileUrl.startsWith('https:') ? https : http;
             const proxyReq = client.get(fileUrl, { headers: reqHeaders }, (proxyRes) => {
                 const status = proxyRes.statusCode || 200;
-                // Determine correct Content-Type: force audio/mpeg for MP3 files
-                let contentType = proxyRes.headers['content-type'] || 'audio/mpeg';
-                if (fileUrl.toLowerCase().endsWith('.mp3') || contentType.startsWith('audio/')) {
-                    contentType = 'audio/mpeg';  // Always use audio/mpeg for browser compatibility
+                
+                // Determine correct Content-Type based on file extension
+                const urlPath = new URL(fileUrl).pathname.toLowerCase();
+                let contentType = 'audio/mpeg'; // default
+                if (urlPath.endsWith('.wav') || urlPath.endsWith('.wave')) {
+                    contentType = 'audio/wav';
+                } else if (urlPath.endsWith('.m4a') || urlPath.endsWith('.m4b')) {
+                    contentType = 'audio/mp4';
+                } else if (urlPath.endsWith('.ogg') || urlPath.endsWith('.oga')) {
+                    contentType = 'audio/ogg';
+                } else if (urlPath.endsWith('.webm')) {
+                    contentType = 'audio/webm';
+                } else if (urlPath.endsWith('.flac')) {
+                    contentType = 'audio/flac';
+                } else if (urlPath.endsWith('.aac')) {
+                    contentType = 'audio/aac';
+                } else if (!urlPath.endsWith('.mp3')) {
+                    // If no extension matches, try R2's content-type if it's audio
+                    if (proxyRes.headers['content-type']?.startsWith('audio/')) {
+                        contentType = proxyRes.headers['content-type'];
+                    }
                 }
-                console.log(`[Stream] R2 returned ${status} | Content-Type from R2: ${proxyRes.headers['content-type']} | Setting to: ${contentType} | Size: ${proxyRes.headers['content-length']} bytes`);
+                // mp3 stays as default audio/mpeg
+                
+                console.log(`[Stream] File: ${urlPath} | R2 Content-Type: ${proxyRes.headers['content-type']} | Serving as: ${contentType} | Status: ${status} | Size: ${proxyRes.headers['content-length']} bytes`);
                 const resHeaders = {
                     'Content-Type': contentType,
                     'Accept-Ranges': 'bytes',

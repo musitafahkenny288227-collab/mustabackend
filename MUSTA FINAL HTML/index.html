@@ -5637,6 +5637,19 @@
     let toastTimer = null;
     let audio = new Audio();
     audio.volume = 0.8;
+    
+    // Audio error handler
+    audio.addEventListener('error', (e) => {
+        const errorCodes = {
+            1: 'MEDIA_ERR_ABORTED - Playback was aborted',
+            2: 'MEDIA_ERR_NETWORK - Network error',
+            3: 'MEDIA_ERR_DECODE - Decoding failed (unsupported audio format)',
+            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Audio format not supported by browser'
+        };
+        const errorMsg = errorCodes[audio.error?.code] || `Unknown error (code: ${audio.error?.code})`;
+        console.error('🔴 Audio Error:', errorMsg, 'Current src:', audio.src);
+        showToast(`Audio Error: ${errorMsg}`, '❌');
+    });
 
     function getArtistFallbackPhoto(artistName, artistSongs = []) {
       const normalizedName = artistName.trim().toLowerCase();
