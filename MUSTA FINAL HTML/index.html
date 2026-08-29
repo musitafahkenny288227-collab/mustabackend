@@ -5638,17 +5638,41 @@
     let audio = new Audio();
     audio.volume = 0.8;
     
-    // Audio error handler
+    // Audio error handler with comprehensive diagnostics
     audio.addEventListener('error', (e) => {
         const errorCodes = {
             1: 'MEDIA_ERR_ABORTED - Playback was aborted',
-            2: 'MEDIA_ERR_NETWORK - Network error',
-            3: 'MEDIA_ERR_DECODE - Decoding failed (unsupported audio format)',
-            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Audio format not supported by browser'
+            2: 'MEDIA_ERR_NETWORK - Network error occurred (check internet connection)',
+            3: 'MEDIA_ERR_DECODE - Decoding failed (file might be corrupted)',
+            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Audio format not supported by your browser'
         };
-        const errorMsg = errorCodes[audio.error?.code] || `Unknown error (code: ${audio.error?.code})`;
-        console.error('🔴 Audio Error:', errorMsg, 'Current src:', audio.src);
+        const code = audio.error?.code || 'UNKNOWN';
+        const errorMsg = errorCodes[code] || `Unknown error (code: ${code})`;
+        console.error('🔴 Audio Error:', {
+            code: code,
+            message: errorMsg,
+            src: audio.src,
+            networkState: audio.networkState,
+            readyState: audio.readyState,
+            currentTime: audio.currentTime,
+            duration: audio.duration
+        });
         showToast(`Audio Error: ${errorMsg}`, '❌');
+    });
+    
+    // Also log when audio loading starts
+    audio.addEventListener('loadstart', () => {
+        console.log('📥 Audio loading started:', { src: audio.src, networkState: audio.networkState });
+    });
+    
+    // Log when audio can play
+    audio.addEventListener('canplay', () => {
+        console.log('✅ Audio can play:', { src: audio.src, duration: audio.duration });
+    });
+    
+    // Log when audio has enough data to start playing
+    audio.addEventListener('canplaythrough', () => {
+        console.log('✅ Audio has enough data to play through');
     });
 
     function getArtistFallbackPhoto(artistName, artistSongs = []) {
@@ -6736,12 +6760,33 @@
         : `https://mustabackend-nenb.onrender.com/api/songs/${id}/stream`;
       
       console.log('🔗 Using stream URL:', streamUrl);
-      console.log('🔊 Audio element:', audio);
+      console.log('🔊 Audio element state before load:', { 
+        currentSrc: audio.src,
+        networkState: audio.networkState,
+        readyState: audio.readyState,
+        canPlayMP3: audio.canPlayType('audio/mpeg'),
+        canPlayWav: audio.canPlayType('audio/wav'),
+        error: audio.error
+      });
       console.log('📁 Original file_path from DB:', s.file_path);
       
+      // Clear any previous errors
+      audio.src = '';
+      
+      // Set crossorigin for CORS
+      audio.crossOrigin = 'anonymous';
+      
+      // Now set the new source
       audio.src = streamUrl;
+      audio.load(); // Explicitly load the media
+      
       console.log('✓ Set audio.src to:', audio.src);
-      console.log('📊 Audio element after setting src:', { networkState: audio.networkState, readyState: audio.readyState, canPlayType: audio.canPlayType('audio/mpeg') });
+      console.log('📊 Audio element after setting src:', { 
+        networkState: audio.networkState, 
+        readyState: audio.readyState, 
+        src: audio.src,
+        error: audio.error
+      });
       
       audio.play().catch((err) => { 
         console.error('❌ Play error:', err.message, err);
