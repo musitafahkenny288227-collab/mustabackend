@@ -1,0 +1,28 @@
+# Deploy scripts with secrets
+deploy-*.ps1
+deploy-*.js
+deploy-*.sh
+upload-*.ps1
+copy-to-clipboard.ps1
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node/npm
+node_modules/
+package-lock.json
+.node-version
+.npm
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build/cache
+.wrangler/
+dist/
+build/
