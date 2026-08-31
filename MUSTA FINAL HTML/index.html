@@ -613,7 +613,7 @@
     /* Mobile */
     @media (max-width: 768px) {
       .hero-inner {
-        padding: 20px 16px;
+        padding: 14px 16px 10px;
         justify-content: center;
       }
 
@@ -643,8 +643,6 @@
         padding: 10px 20px;
         font-size: 13px;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
 
       .hero-btn-primary span:last-child,
@@ -1445,7 +1443,7 @@
   <!-- AD TOP: AdSense Auto Ads handles placement automatically -->
 
   <!-- ========== HERO BANNER ========== -->
-  <div class="hero-section" style="min-height:200px;padding:0">
+  <div class="hero-section" style="min-height:160px;padding:0">
 
     <!-- Background collage of album covers (loaded dynamically) -->
     <div class="hero-bg-carousel" style="opacity:0.75">
@@ -1583,9 +1581,9 @@
               class="hero-stat-label">Plays</span></div>
         </div>
         <!-- Hero Action Buttons -->
-        <div class="hero-actions" style="display:flex;gap:12px;margin-top:24px;justify-content:center">
-          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:8px;width:auto;padding:11px 22px">
-            <span style="font-size:18px">📱</span>
+        <div class="hero-actions" style="display:flex;gap:12px;margin-top:16px;justify-content:center">
+          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:8px;width:auto;max-width:220px;padding:11px 24px;flex-shrink:0">
+            <span style="font-size:16px">📱</span>
             <span>Download App</span>
           </button>
         </div>
@@ -4264,6 +4262,32 @@
       }
       .hero-trust-bar {
         grid-template-columns: 1fr !important;
+      }
+    }
+
+    /* ── ALL MOBILE (max 767px) — compact cards ─── */
+    @media (max-width: 767px) {
+      /* Compact card info area */
+      .card-info {
+        padding: 5px 2px 2px !important;
+      }
+      .card-title {
+        font-size: 11px !important;
+      }
+      .card-artist {
+        font-size: 10px !important;
+      }
+      /* Hide hero trust bar on mobile to save space */
+      .hero-trust-bar {
+        display: none !important;
+      }
+      /* Hero stats row smaller */
+      .hero-stat-num {
+        font-size: 18px !important;
+      }
+      /* Reduce hero margin-top for actions */
+      .hero-actions {
+        margin-top: 10px !important;
       }
     }
 
