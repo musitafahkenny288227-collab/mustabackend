@@ -637,11 +637,11 @@
 
       .hero-btn-primary,
       .hero-btn-secondary {
-        flex: 1 1 0 !important;
+        flex: 0 0 auto !important;
         min-width: 0 !important;
-        max-width: 50% !important;
-        padding: 10px 12px;
-        font-size: 12px;
+        max-width: none !important;
+        padding: 10px 20px;
+        font-size: 13px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1584,7 +1584,7 @@
         </div>
         <!-- Hero Action Buttons -->
         <div class="hero-actions" style="display:flex;gap:12px;margin-top:24px;justify-content:center">
-          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:flex;align-items:center;gap:8px">
+          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:8px;width:auto;padding:11px 22px">
             <span style="font-size:18px">📱</span>
             <span>Download App</span>
           </button>
@@ -1632,9 +1632,9 @@
 
   <!-- ========== TIME FILTER ========== -->
   <div id="timeFilterBar"
-    style="background:var(--bg-secondary,var(--nav));border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <span style="font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap">Filter Music By :</span>
-    <button class="time-btn active" onclick="filterByTime('all',this)">All Time</button>
+    style="background:var(--bg-secondary,var(--nav));border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none">
+    <span style="font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap">Filter:</span>
+    <button class="time-btn active" onclick="filterByTime('all',this)">All</button>
     <button class="time-btn" onclick="filterByTime('day',this)">Day</button>
     <button class="time-btn" onclick="filterByTime('week',this)">Week</button>
     <button class="time-btn" onclick="filterByTime('month',this)">Month</button>
@@ -1672,6 +1672,8 @@
     }
 
     /* Time filter */
+    #timeFilterBar::-webkit-scrollbar { display: none; }
+
     .time-btn {
       background: var(--card);
       border: 1px solid var(--border);
@@ -1706,13 +1708,16 @@
       }
 
       #timeFilterBar {
-        padding: 6px 12px;
-        gap: 6px;
+        padding: 6px 10px;
+        gap: 5px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
       }
 
       .time-btn {
         font-size: 12px;
-        padding: 4px 12px;
+        padding: 5px 11px;
+        flex-shrink: 0;
       }
     }
   </style>
@@ -4677,21 +4682,30 @@
         display: inline-flex !important;
         align-items: center;
         justify-content: center;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 2px 6px !important;
-        border-radius: 8px;
+        min-width: 28px;
+        min-height: 28px;
+        padding: 2px 5px !important;
+        border-radius: 6px;
         background: rgba(148, 163, 184, 0.08);
         color: #dbeafe !important;
+        font-size: 14px !important;
       }
 
       #dlBtn {
-        padding: 5px 12px !important;
+        padding: 5px 10px !important;
         font-size: 11px !important;
+        white-space: nowrap !important;
+      }
+
+      /* Prev/Next buttons smaller on mobile */
+      #audioPlayer button[onclick="prevSong()"],
+      #audioPlayer button[onclick="nextSong()"] {
+        font-size: 16px !important;
+        padding: 2px 3px !important;
       }
 
       #volumeBar {
-        width: 50px !important;
+        width: 44px !important;
       }
 
       #audioPlayer>div>div:nth-child(2)>div:nth-child(3) {
