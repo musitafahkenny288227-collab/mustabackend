@@ -3897,8 +3897,11 @@
         grid-auto-flow: column !important;
         grid-auto-columns: minmax(140px, 42vw) !important;
         overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
         gap: 8px !important;
       }
+      #songsGrid.music-grid::-webkit-scrollbar { display: none !important; }
 
       #musicSections .music-grid {
         grid-template-columns: none !important;
@@ -4251,22 +4254,37 @@
       }
     }
 
-    /* ── NARROW PHONES (max 420px) — 2-column grid ─── */
+    /* ── NARROW PHONES (max 420px) — keep horizontal scroll ─── */
     @media (max-width: 420px) {
-      #musicSections .music-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-        grid-auto-columns: unset !important;
-        grid-auto-flow: row !important;
-        grid-template-rows: unset !important;
-        overflow-x: visible !important;
-      }
       .hero-trust-bar {
         grid-template-columns: 1fr !important;
       }
     }
 
-    /* ── ALL MOBILE (max 767px) — compact cards ─── */
+    /* ── ALL MOBILE (max 767px) — horizontal scroll cards ─── */
     @media (max-width: 767px) {
+      /* All song/music grids scroll horizontally — Netflix style */
+      #musicSections .music-grid,
+      .music-grid,
+      .songs-grid {
+        display: grid !important;
+        grid-template-columns: none !important;
+        grid-template-rows: 1fr !important;
+        grid-auto-flow: column !important;
+        grid-auto-columns: minmax(130px, 38vw) !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        gap: 8px !important;
+        padding-bottom: 8px !important;
+      }
+      #musicSections .music-grid::-webkit-scrollbar,
+      .music-grid::-webkit-scrollbar,
+      .songs-grid::-webkit-scrollbar {
+        display: none !important;
+      }
+
       /* Compact card info area */
       .card-info {
         padding: 5px 2px 2px !important;
