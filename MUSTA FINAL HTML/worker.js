@@ -384,16 +384,19 @@ function serveArtistNotFound(artistName) {
 async function fetchSongBySlug(slug) {
   if (!slug) return null;
   
-  const [titleSlug, artistSlug] = slug.split('/');
+  // slug can be "title-slug/artist-slug" or just "title-slug"
+  const parts = slug.split('/');
+  const titleSlug = parts[0];
+  const artistSlug = parts[1] || null;
   if (!titleSlug) return null;
   
-  // Search by title, then verify the artist when the URL includes it.
+  // Convert slug back to search term
   const searchTerm = titleSlug.replace(/-/g, ' ');
 
   try {
-    // Try search endpoint first with timeout
+    // Try search endpoint with generous limit
     const res = await fetch(
-      `${API_BASE}/api/songs?search=${encodeURIComponent(searchTerm)}&limit=5`,
+      `${API_BASE}/api/songs?search=${encodeURIComponent(searchTerm)}&limit=20`,
       { 
         headers: { 'User-Agent': 'DJMusta-SEO-Bot/1.0' },
         signal: AbortSignal.timeout(8000)
@@ -407,23 +410,40 @@ async function fetchSongBySlug(slug) {
 
     if (!songs.length) return null;
 
-    // Find the best match — exact slug match preferred
-    const exactMatch = songs.find(s => 
-      s && s.title && createSlug(s.title) === titleSlug &&
-      (!artistSlug || (s.artist && createSlug(s.artist) === artistSlug))
+    // 1. Exact match: both title and artist slug match
+    if (artistSlug) {
+      const exact = songs.find(s =>
+        s && s.title && s.artist &&
+        createSlug(s.title) === titleSlug &&
+        createSlug(s.artist) === artistSlug
+      );
+      if (exact) return exact;
+    }
+
+    // 2. Title slug matches exactly (ignore artist)
+    const titleMatch = songs.find(s =>
+      s && s.title && createSlug(s.title) === titleSlug
     );
-    
-    if (exactMatch) return exactMatch;
-    if (artistSlug) return null; // Require exact match if artist specified
-    return songs[0]; // Return first match if only title match
+    if (titleMatch) return titleMatch;
+
+    // 3. Fuzzy: title slug starts with or contains the search slug
+    const fuzzy = songs.find(s =>
+      s && s.title && createSlug(s.title).includes(titleSlug.substring(0, 20))
+    );
+    if (fuzzy) return fuzzy;
+
+    // 4. Return first result if only one word search term (common for short titles)
+    if (searchTerm.split(' ').length <= 2) return songs[0];
+
+    return null;
 
   } catch (err) {
     console.warn('Worker song search error:', err.message);
     
     // Fallback: try numeric ID if slug is a number
-    if (/^\d+$/.test(slug)) {
+    if (/^\d+$/.test(titleSlug)) {
       try {
-        const res2 = await fetch(`${API_BASE}/api/songs/${slug}`, {
+        const res2 = await fetch(`${API_BASE}/api/songs/${titleSlug}`, {
           signal: AbortSignal.timeout(8000)
         });
         if (res2.ok) {
@@ -636,38 +656,59 @@ ${durationSec ? `<meta property="music:duration" content="${durationSec}">` : ''
 }
 
 // ────────────────────────────────────────────────────────────
-// 404 PAGE — song not found
+// 404 PAGE — song not found in API, fall through to SPA
+// The SPA's song-router.js will try again client-side
 // ────────────────────────────────────────────────────────────
 function serveNotFound(slug) {
-  const title = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const title = slug.split('/')[0].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  // Serve the full SPA (index.html content) so song-router.js
+  // can attempt to resolve the slug client-side
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${escHtml(title)} | DJ Musta Uganda Music</title>
-<meta name="description" content="Search for ${escHtml(title)} and thousands of other Ugandan songs on DJ Musta — Uganda's #1 free music platform.">
+<meta name="description" content="Stream and download ${escHtml(title)} and thousands of Ugandan songs free on DJ Musta.">
 <link rel="canonical" href="${SITE_URL}/song/${slug}">
-<meta name="robots" content="noindex, follow">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="${escHtml(title)} | DJ Musta">
+<meta property="og:description" content="Stream and download ${escHtml(title)} free on DJ Musta — Uganda's #1 Music Platform.">
+<meta property="og:image" content="${DEFAULT_IMG}">
+<meta property="og:url" content="${SITE_URL}/song/${slug}">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:sans-serif;background:#0F172A;color:#F1F5F9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;text-align:center}
-  h1{font-size:24px;margin-bottom:10px}p{color:#94A3B8;margin-bottom:20px}
-  a{color:#a855f7;font-weight:700;font-size:15px}
+  h2{font-size:22px;margin-bottom:10px;color:#F1F5F9}
+  p{color:#94A3B8;margin-bottom:24px;font-size:15px;line-height:1.6}
+  .btn{background:linear-gradient(135deg,#a855f7,#6366f1);color:white;border:none;padding:14px 32px;border-radius:50px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;margin:8px;transition:all .2s}
+  .btn:hover{transform:translateY(-2px);opacity:.9}
+  .bar{width:200px;height:3px;background:#334155;border-radius:2px;margin:16px auto 8px;overflow:hidden}
+  .bar-fill{height:100%;background:linear-gradient(90deg,#a855f7,#6366f1);border-radius:2px;animation:load 2s linear forwards}
+  @keyframes load{from{width:0}to{width:100%}}
+  .msg{font-size:12px;color:#475569}
 </style>
 </head>
 <body>
   <div>
     <div style="font-size:56px;margin-bottom:16px">🎵</div>
-    <h1>${escHtml(title)}</h1>
-    <p>This song may have been moved. Search for it on DJ Musta.</p>
-    <a href="${SITE_URL}?search=${encodeURIComponent(title)}">🔍 Search on DJ Musta</a>
+    <h2>${escHtml(title)}</h2>
+    <p>Loading song on DJ Musta…<br>If it doesn't load, search for it below.</p>
+    <div class="bar"><div class="bar-fill"></div></div>
+    <div class="msg">Redirecting to DJ Musta player…</div>
+    <br><br>
+    <a class="btn" href="${SITE_URL}?search=${encodeURIComponent(slug.split('/')[0].replace(/-/g, ' '))}">🔍 Search on DJ Musta</a>
   </div>
-  <script>setTimeout(()=>location.href='${SITE_URL}?search=${encodeURIComponent(title)}',3000)</script>
+  <script>
+    // Try loading the SPA which will attempt to resolve this slug client-side
+    setTimeout(function() {
+      window.location.href = '${SITE_URL}/?song_slug=${encodeURIComponent(slug)}';
+    }, 1500);
+  </script>
 </body>
 </html>`;
   return new Response(html, {
-    status: 404,
+    status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' }
   });
 }
