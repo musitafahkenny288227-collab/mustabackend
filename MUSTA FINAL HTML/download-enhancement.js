@@ -1,5 +1,8 @@
 // Shared tagged MP3 downloader for standalone catalog pages.
 (function () {
+  // Ensure window.API is set — sub-pages declare `const API` locally; sync it here.
+  if (!window.API && typeof API !== 'undefined') window.API = API;
+
   const writerPromise = import('https://cdn.jsdelivr.net/npm/browser-id3-writer@6.4.0/dist/browser-id3-writer.mjs')
     .then(module => module.ID3Writer);
 

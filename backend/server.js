@@ -20,12 +20,17 @@ const webpush = require('web-push');
 // Then set them as environment variables on Render
 // ============================================================
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BAonU5h2RMD7db5Zl3gGS_01GfXP0_tevIWydLGXvX4JTJOWpkku-ag-be63rkPoGCs9CSka6y--ktyq-kJvYxw';
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '4DYymRLq4Akt91QtOi13xSG0F_UCEt_gI6DyIfQuNdc';
+// SECURITY: VAPID_PRIVATE_KEY must be set as an environment variable — no fallback.
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || 'mailto:musitafahkenny288227@gmail.com';
 
 try {
-    webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
-    console.log('[Push] VAPID keys configured');
+    if (VAPID_PRIVATE) {
+        webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
+        console.log('[Push] VAPID keys configured');
+    } else {
+        console.warn('[Push] VAPID_PRIVATE_KEY not set — push notifications disabled. Set it as an env var on Render.');
+    }
 } catch(e) {
     console.warn('[Push] VAPID setup failed - push notifications disabled:', e.message);
 }
@@ -496,23 +501,30 @@ async function initDB() {
     }
 
     // Seed admin - ensure musitafahkenny288227@gmail.com is admin
-    const hashed = hashPassword('28822722MUSTA');
-    
-    // First, update existing user if exists
-    const existing = await query('SELECT id FROM users WHERE email=$1', ['musitafahkenny288227@gmail.com']);
-    if (existing.rows.length > 0) {
-        await query(
-            'UPDATE users SET username=$1, password=$2, is_admin=TRUE WHERE email=$3',
-            ['MUSTA', hashed, 'musitafahkenny288227@gmail.com']
-        );
-        console.log('âœ… Admin updated: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
+    // SECURITY: Use ADMIN_SEED_PASSWORD env var. Fallback only used on first-run
+    // when no env var is set; set ADMIN_SEED_PASSWORD in Render environment variables.
+    const adminSeedPassword = process.env.ADMIN_SEED_PASSWORD;
+    if (!adminSeedPassword) {
+        console.warn('⚠️  ADMIN_SEED_PASSWORD env var not set — admin password seeding skipped. Set it on Render to seed the admin account.');
     } else {
-        // Insert new admin
-        await query(
-            'INSERT INTO users (username, email, password, is_admin) VALUES ($1,$2,$3,TRUE)',
-            ['MUSTA', 'musitafahkenny288227@gmail.com', hashed]
-        );
-        console.log('âœ… Admin created: musitafahkenny288227@gmail.com / 28822722MUSTA (is_admin=TRUE)');
+        const hashed = hashPassword(adminSeedPassword);
+    
+        // First, update existing user if exists
+        const existing = await query('SELECT id FROM users WHERE email=$1', ['musitafahkenny288227@gmail.com']);
+        if (existing.rows.length > 0) {
+            await query(
+                'UPDATE users SET username=$1, password=$2, is_admin=TRUE WHERE email=$3',
+                ['MUSTA', hashed, 'musitafahkenny288227@gmail.com']
+            );
+            console.log('✅ Admin updated: musitafahkenny288227@gmail.com (is_admin=TRUE)');
+        } else {
+            // Insert new admin
+            await query(
+                'INSERT INTO users (username, email, password, is_admin) VALUES ($1,$2,$3,TRUE)',
+                ['MUSTA', 'musitafahkenny288227@gmail.com', hashed]
+            );
+            console.log('✅ Admin created: musitafahkenny288227@gmail.com (is_admin=TRUE)');
+        }
     }
 
     // Add missing columns to existing tables
@@ -852,25 +864,46 @@ const server = http.createServer(async (req, res) => {
     // Dynamic sitemap.xml
     if (pathname === '/sitemap.xml') {
         try {
-            const songs = await query('SELECT id, title, artist, created_at FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
-            const urls = songs.rows.map(s => {
-                const slug = encodeURIComponent(s.title.toLowerCase().replace(/\s+/g,'-'));
+            const songs = await query('SELECT id, title, artist, genre, created_at FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
+            const toSlug = str => str.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
+
+            // Group: homepage + static pages + all songs
+            const staticPages = [
+                { loc: 'https://djmusta.com',              changefreq: 'daily',   priority: '1.0' },
+                { loc: 'https://djmusta.com/new-music',    changefreq: 'daily',   priority: '0.9' },
+                { loc: 'https://djmusta.com/top-songs',    changefreq: 'daily',   priority: '0.9' },
+                { loc: 'https://djmusta.com/top-artists',  changefreq: 'weekly',  priority: '0.8' },
+                { loc: 'https://djmusta.com/gospel',       changefreq: 'weekly',  priority: '0.8' },
+                { loc: 'https://djmusta.com/nonstops',     changefreq: 'weekly',  priority: '0.8' },
+            ];
+
+            const today = new Date().toISOString().split('T')[0];
+
+            const staticUrls = staticPages.map(p => `  <url>
+    <loc>${p.loc}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${p.changefreq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`).join('\n');
+
+            const songUrls = songs.rows.map(s => {
+                const titleSlug  = toSlug(s.title);
+                const artistSlug = toSlug(s.artist);
+                const songUrl    = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
+                const lastmod    = new Date(s.created_at).toISOString().split('T')[0];
                 return `  <url>
-    <loc>https://djmusta.com?song=${s.id}</loc>
-    <lastmod>${new Date(s.created_at).toISOString().split('T')[0]}</lastmod>
+    <loc>${songUrl}</loc>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>`;
             }).join('\n');
+
             const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://djmusta.com</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-${urls}
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${staticUrls}
+${songUrls}
 </urlset>`;
             res.writeHead(200, { 'Content-Type':'application/xml', 'Cache-Control':'public,max-age=3600', ...corsHeaders(origin) });
             return res.end(xml);
@@ -2363,11 +2396,10 @@ function pub(u) {
 // ============================================================
 initDB().then(() => {
     server.listen(PORT, () => {
-        console.log('\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
-        console.log(`â•‘  ðŸŽ§  DJ Musta Music Server               â•‘`);
-        console.log(`â•‘  http://localhost:${PORT}                   â•‘`);
-        console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
-        console.log(`\n  Admin: musitafahkenny288227@gmail.com / 28822722MUSTA`);
+        console.log('\n==============================================');
+        console.log('  DJ Musta Music Server');
+        console.log('  http://localhost:' + PORT);
+        console.log('==============================================');
         console.log(`  DB:    Supabase PostgreSQL\n`);
     });
 }).catch(e => {

@@ -169,6 +169,10 @@ class AnalyticsDashboard {
         }
         this.stats.dailyVisits++;
         this.stats.visits.push({ date: new Date().toISOString() });
+        // Cap to last 500 visits to prevent localStorage from growing indefinitely
+        if (this.stats.visits.length > 500) {
+            this.stats.visits = this.stats.visits.slice(-500);
+        }
         this.save();
     }
 
@@ -209,15 +213,17 @@ class AnalyticsDashboard {
 window.analytics = new AnalyticsDashboard();
 window.analytics.trackVisit();
 
-// Show analytics dashboard
-window.showAnalyticsDashboard = function() {
+// Show LOCAL analytics dashboard (client-side stats only).
+// Named showLocalAnalytics to avoid overriding the real backend
+// showAnalyticsDashboard defined in index.html.
+window.showLocalAnalytics = function() {
     const topPlays = window.analytics.getTopSongs('plays', 5);
     const topDownloads = window.analytics.getTopSongs('downloads', 5);
     const topSearches = window.analytics.getPopularSearches(5);
 
     const dashboard = `
         <div style="padding:20px;max-width:1200px;margin:0 auto">
-            <h2 style="font-size:28px;font-weight:800;margin-bottom:30px">📊 Analytics Dashboard</h2>
+            <h2 style="font-size:28px;font-weight:800;margin-bottom:30px">📊 Local Analytics (This Device)</h2>
             
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-bottom:30px">
                 <div style="background:linear-gradient(135deg,#a855f7,#9333ea);padding:24px;border-radius:16px;color:white">
@@ -272,7 +278,8 @@ window.showAnalyticsDashboard = function() {
         </div>
     `;
     
-    document.getElementById('mainContent').innerHTML = dashboard;
+    const target = document.getElementById('songsGrid') || document.getElementById('mainContent') || document.body;
+    target.innerHTML = dashboard;
 };
 
 // ============================================================
@@ -583,40 +590,11 @@ const uiTranslations = {
 
 window.currentLanguage = localStorage.getItem('language') || 'en';
 
-window.changeLanguage = function(lang) {
-    window.currentLanguage = lang;
-    localStorage.setItem('language', lang);
-    showToast('✅ Language changed!');
-    // You would reload UI elements here
-    location.reload();
-};
-
+// window.t() — quick translation lookup using the uiTranslations table above.
+// changeLanguage() and showLanguageSelector() are defined in index.html (uses
+// language-support.js full implementation) and must NOT be overridden here.
 window.t = function(key) {
-    return uiTranslations[window.currentLanguage][key] || uiTranslations.en[key] || key;
-};
-
-// Language selector
-window.showLanguageSelector = function() {
-    const modal = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px" onclick="this.remove()">
-            <div style="background:var(--card);border-radius:20px;padding:30px;max-width:400px;width:100%" onclick="event.stopPropagation()">
-                <h3 style="font-size:22px;font-weight:700;margin-bottom:20px">🌍 Choose Language</h3>
-                
-                <div style="display:grid;gap:12px">
-                    <button onclick="changeLanguage('en')" style="padding:16px;background:${window.currentLanguage === 'en' ? 'var(--pink)' : 'rgba(168,85,247,0.1)'};color:white;border:1px solid var(--pink);border-radius:8px;font-weight:600;cursor:pointer;text-align:left">
-                        🇬🇧 English
-                    </button>
-                    <button onclick="changeLanguage('lg')" style="padding:16px;background:${window.currentLanguage === 'lg' ? 'var(--pink)' : 'rgba(168,85,247,0.1)'};color:white;border:1px solid var(--pink);border-radius:8px;font-weight:600;cursor:pointer;text-align:left">
-                        🇺🇬 Luganda
-                    </button>
-                    <button onclick="changeLanguage('sw')" style="padding:16px;background:${window.currentLanguage === 'sw' ? 'var(--pink)' : 'rgba(168,85,247,0.1)'};color:white;border:1px solid var(--pink);border-radius:8px;font-weight:600;cursor:pointer;text-align:left">
-                        🇹🇿 Kiswahili
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modal);
+    return uiTranslations[window.currentLanguage]?.[key] || uiTranslations.en[key] || key;
 };
 
 // ============================================================

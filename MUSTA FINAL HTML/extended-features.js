@@ -13,111 +13,12 @@ let notifications = [];
 // Note: toggleTheme, queueVisible, currentTheme are managed in index.html
 
 // ============================================================
-// 2. CLICKABLE SONG CARDS → OPEN DETAIL MODAL
+// 2. SONG DETAIL MODAL — delegates to index.html's implementation
+// openSongDetail, closeModal, playSongFromModal, downloadFromModal,
+// shareFromModal, loadComments, renderComments, postComment are all
+// defined in index.html and use window.currentModalSong for state.
+// This file must NOT redefine them to avoid split-brain state.
 // ============================================================
-function openSongDetail(songId) {
-  const song = songs.find(s => s.id === songId);
-  if (!song) return;
-  
-  document.getElementById('sdTitle').textContent = song.title;
-  document.getElementById('sdArtist').textContent = window.formatArtistNames ? window.formatArtistNames(song.artist) : song.artist;
-  document.getElementById('sdGenre').textContent = song.genre || 'Other';
-  document.getElementById('sdCover').src = imgSrc(song.cover_path);
-  document.getElementById('sdStats').innerHTML = `
-    <div>▶ ${song.play_count || 0} plays</div>
-    <div>♥ ${song.like_count || 0} likes</div>
-    <div>⬇ ${song.download_count || 0} downloads</div>
-  `;
-  
-  // Lyrics
-  if (song.lyrics && song.lyrics.trim()) {
-    document.getElementById('sdLyrics').textContent = song.lyrics;
-    document.getElementById('sdLyricsWrap').style.display = 'block';
-  } else {
-    document.getElementById('sdLyricsWrap').style.display = 'none';
-  }
-  
-  // Store song ID for actions
-  document.getElementById('songDetailModal').setAttribute('data-song-id', songId);
-  document.getElementById('songDetailModal').style.display = 'flex';
-  
-  // Load comments
-  loadComments(songId);
-}
-
-function closeModal(id) {
-  document.getElementById(id).style.display = 'none';
-}
-
-function playSongFromModal() {
-  const id = parseInt(document.getElementById('songDetailModal').getAttribute('data-song-id'));
-  playSong(id);
-}
-
-function downloadFromModal() {
-  const id = parseInt(document.getElementById('songDetailModal').getAttribute('data-song-id'));
-  const song = songs.find(s => s.id === id);
-  if (song) downloadSong(id, song.title, song.file_path);
-}
-
-function shareFromModal() {
-  const id = parseInt(document.getElementById('songDetailModal').getAttribute('data-song-id'));
-  const song = songs.find(s => s.id === id);
-  if (song) openShare(id, song.title, song.artist);
-}
-
-// ============================================================
-// 3. COMMENTS SECTION
-// ============================================================
-async function loadComments(songId) {
-  try {
-    const d = await api(`/songs/${songId}/comments`);
-    renderComments(d.comments || []);
-  } catch(e) {
-    console.error('Failed to load comments:', e);
-  }
-}
-
-function renderComments(comments) {
-  const container = document.getElementById('sdComments');
-  if (!container) return;
-  
-  if (comments.length === 0) {
-    container.innerHTML = '<p style="color:var(--muted);font-size:13px">No comments yet. Be the first!</p>';
-    return;
-  }
-  
-  container.innerHTML = comments.map(c => `
-    <div style="background:var(--bg);padding:12px;border-radius:10px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-weight:700;font-size:13px">${esc(c.username)}</span>
-        <span style="font-size:11px;color:var(--muted)">${new Date(c.created_at).toLocaleDateString()}</span>
-      </div>
-      <p style="font-size:13px;color:var(--text);line-height:1.5">${esc(c.comment)}</p>
-    </div>
-  `).join('');
-}
-
-async function postComment() {
-  if (!currentUser) { showAuth('login'); return; }
-  const songId = parseInt(document.getElementById('songDetailModal').getAttribute('data-song-id'));
-  const input = document.getElementById('sdCommentInput');
-  const comment = input.value.trim();
-  
-  if (!comment) {
-    showToast('Comment cannot be empty', '⚠️');
-    return;
-  }
-  
-  try {
-    await api(`/songs/${songId}/comments`, {method: 'POST', body: JSON.stringify({comment})});
-    input.value = '';
-    loadComments(songId);
-    showToast('Comment posted!', '💬');
-  } catch(e) {
-    showToast(e.message, '❌');
-  }
-}
 
 // ============================================================
 // 4. FOLLOWING SYSTEM

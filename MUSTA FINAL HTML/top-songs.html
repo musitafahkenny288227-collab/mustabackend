@@ -305,7 +305,16 @@ function shareChart(method) {
   const text = '🏆 Check out the Top 10 Ugandan Songs this week on DJ Musta!';
   if (method === 'whatsapp') window.open(`https://wa.me/?text=${encodeURIComponent(text+' '+url)}`, '_blank');
   else if (method === 'twitter') window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
-  else { navigator.clipboard?.writeText(url); alert('Link copied!'); }
+  else {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.querySelector('.share-btn.share-cp');
+        if (btn) { const orig = btn.textContent; btn.textContent = '✅ Copied!'; setTimeout(() => btn.textContent = orig, 2000); }
+      }).catch(() => { window.prompt('Copy this link:', url); });
+    } else {
+      window.prompt('Copy this link:', url);
+    }
+  }
 }
 
 loadChart();

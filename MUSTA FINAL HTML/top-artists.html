@@ -252,7 +252,7 @@ function renderArtists(artists) {
   const grid = document.getElementById('artistGrid');
   if (!artists.length) { grid.innerHTML = '<p style="color:#64748B;padding:20px;grid-column:1/-1">No artists found.</p>'; return; }
   grid.innerHTML = artists.map(a => {
-    const img = a.cover || a.avatar || a.image || '';
+    const img = a.photo_url || a.photoUrl || a.cover || a.avatar || a.image || '';
     const imgSrc = img ? (img.startsWith('http') ? img : API + img) : '';
     return `
     <article class="artist-card" onclick="viewArtist('${esc(a.name)}')">
