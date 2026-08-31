@@ -460,7 +460,7 @@
     }
 
     .hero-stat-label {
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 700;
       color: rgba(255, 255, 255, 0.45);
       text-transform: uppercase;
@@ -668,7 +668,6 @@
       .hero-trust-card {
         padding: 14px 12px;
       }
-
       .hero-stats {
         gap: 12px !important;
       }
@@ -790,13 +789,13 @@
     }
 
     .album-info .artist {
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
       margin-bottom: 2px;
     }
 
     .album-info .title {
-      font-size: 8px;
+      font-size: 11px;
       opacity: 0.8;
     }
 
@@ -866,10 +865,10 @@
       <div style="width:6px;height:6px;background:#a855f7;border-radius:50%;animation:npPulse 1.2s infinite"></div>
       <span style="font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap">NOW PLAYING</span>
       <span id="npBarTitle"
-        style="font-size:13px;color:white;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px"></span>
+        style="font-size:13px;color:white;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(300px,40vw)"></span>
       <span style="font-size:12px;color:var(--muted)">—</span>
       <span id="npBarArtist"
-        style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px"></span>
+        style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(200px,25vw)"></span>
       <button onclick="document.getElementById('audioPlayer').scrollIntoView({behavior:'smooth'})"
         style="margin-left:auto;background:rgba(168,85,247,0.2);border:1px solid rgba(168,85,247,0.3);color:#a855f7;padding:3px 12px;border-radius:50px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">▶
         Open Player</button>
@@ -964,7 +963,7 @@
         gap: 7px;
         overflow: hidden;
         white-space: nowrap;
-        font-size: 9px !important;
+        font-size: 11px !important;
       }
 
       .promotion-link {
@@ -1701,7 +1700,9 @@
     @media(max-width:767px) {
       .az-btn {
         font-size: 12px;
-        padding: 8px 8px;
+        padding: 10px 8px;
+        min-height: 44px;
+        min-width: 34px;
       }
 
       #timeFilterBar {
@@ -4247,6 +4248,20 @@
       }
     }
 
+    /* ── NARROW PHONES (max 420px) — 2-column grid ─── */
+    @media (max-width: 420px) {
+      #musicSections .music-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        grid-auto-columns: unset !important;
+        grid-auto-flow: row !important;
+        grid-template-rows: unset !important;
+        overflow-x: visible !important;
+      }
+      .hero-trust-bar {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
       /* --- HERO --- */
       .hero-name {
         font-size: clamp(22px, 7vw, 32px) !important;
@@ -6014,6 +6029,15 @@
       }
 
       #audioPlayer > div > div:nth-child(2) > div:nth-child(3) {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
+        gap: 4px !important;
+        min-height: 36px !important;
+      }
+      #audioPlayer > div > div:nth-child(2) > div:nth-child(3)::-webkit-scrollbar {
         display: none !important;
       }
     }
