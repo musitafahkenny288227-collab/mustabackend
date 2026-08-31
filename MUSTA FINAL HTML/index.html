@@ -6174,53 +6174,203 @@
       padding-bottom: 15px;
     }
 
-    /* Individual Song Card */
-    .song-card,
-    .music-card {
-      background-color: #161c2a;
-      border-radius: 6px;
+    /* ── SPOTIFY-STYLE SONG CARD ─────────────────────────────── */
+    .song-card {
+      background: #161c2a;
+      border-radius: 10px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
-      width: clamp(120px, 25vw, 160px);
+      cursor: pointer;
+      transition: background .2s, transform .2s;
+      position: relative;
     }
 
-    .image-wrapper img,
-    .card-img-wrap img {
+    .song-card:hover {
+      background: #1e2840;
+      transform: translateY(-2px);
+    }
+
+    .song-card.playing {
+      background: #1a1f3a;
+      outline: 2px solid var(--pink);
+    }
+
+    /* Cover art wrapper — square with relative positioning for overlay */
+    .image-wrapper {
+      position: relative;
       width: 100%;
-      aspect-ratio: 1 / 1;
+      aspect-ratio: 1/1;
+      overflow: hidden;
+      background: #0d1227;
+      flex-shrink: 0;
+    }
+
+    .image-wrapper img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       display: block;
+      transition: transform .35s;
     }
 
-    /* Text Container */
-    .card-details,
-    .card-info {
-      padding: 8px;
-      text-align: left;
+    .song-card:hover .image-wrapper img {
+      transform: scale(1.04);
     }
 
-    .song-title,
-    .card-title {
-      font-size: 0.9rem;
-      font-weight: bold;
-      margin: 0 0 3px 0;
+    /* Play button overlay — always visible on touch, hover on desktop */
+    .sc-play-overlay {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      width: 38px;
+      height: 38px;
+      background: var(--pink);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: white;
+      box-shadow: 0 4px 16px rgba(168,85,247,.5);
+      border: none;
+      cursor: pointer;
+      transition: transform .2s, opacity .2s;
+      /* hidden on desktop by default, shown on hover */
+      opacity: 0;
+      transform: scale(.85) translateY(4px);
+    }
+
+    .song-card:hover .sc-play-overlay {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+
+    /* Always show on touch devices (mobile) */
+    @media (hover: none) {
+      .sc-play-overlay {
+        opacity: 1 !important;
+        transform: scale(1) translateY(0) !important;
+        width: 34px;
+        height: 34px;
+        font-size: 14px;
+        bottom: 6px;
+        right: 6px;
+      }
+    }
+
+    /* Currently playing indicator */
+    .song-card.playing .sc-play-overlay {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      background: #22c55e;
+    }
+
+    /* Genre badge */
+    .sc-genre {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      background: rgba(0,0,0,.65);
+      color: rgba(255,255,255,.9);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 50px;
+      letter-spacing: .3px;
+      text-transform: uppercase;
+      max-width: 80%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Like button top-right */
+    .sc-like {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(0,0,0,.5);
+      border: none;
+      color: white;
+      font-size: 14px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity .2s;
+      backdrop-filter: blur(4px);
+    }
+
+    .song-card:hover .sc-like {
+      opacity: 1;
+    }
+
+    .sc-like.liked {
+      opacity: 1;
+      color: #f43f5e;
+    }
+
+    @media (hover: none) {
+      .sc-like { opacity: 1; }
+    }
+
+    /* Text below cover */
+    .card-details {
+      padding: 8px 8px 10px;
+    }
+
+    .song-title {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 3px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: #fff;
+      line-height: 1.2;
     }
 
-    .artist-name,
-    .card-artist {
-      font-size: 0.75rem;
+    .artist-name {
+      font-size: 11px;
       color: #8a92a6;
       margin: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-  </style>
+
+    /* Playing equalizer animation */
+    .sc-eq {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+
+    .sc-eq span {
+      width: 3px;
+      background: #22c55e;
+      border-radius: 1px;
+      animation: eq 1s ease-in-out infinite alternate;
+    }
+
+    .sc-eq span:nth-child(1) { animation-delay: 0s;    height: 6px; }
+    .sc-eq span:nth-child(2) { animation-delay: .2s;   height: 10px; }
+    .sc-eq span:nth-child(3) { animation-delay: .4s;   height: 7px; }
+
+    @keyframes eq {
+      from { transform: scaleY(.4); }
+      to   { transform: scaleY(1); }
+    }
 
   <script>
     // ============================================================
@@ -6758,16 +6908,26 @@
         return;
       }
       if (currentView === 'grid') {
-        g.innerHTML += list.map((s, i) => `
-      <div class="song-card${playIndex === songs.indexOf(s) && audio.src ? ' playing' : ''}" id="card-${s.id}">
+        g.innerHTML += list.map((s, i) => {
+          const isPlaying = playIndex === songs.indexOf(s) && audio.src;
+          const genreLabel = s.genre ? `<span class="sc-genre">${esc(s.genre)}</span>` : '';
+          const likeClass = s.liked ? ' liked' : '';
+          const playIcon = isPlaying
+            ? `<div class="sc-eq"><span></span><span></span><span></span></div>`
+            : '▶';
+          return `
+      <div class="song-card${isPlaying ? ' playing' : ''}" id="card-${s.id}" onclick="playSong(${s.id})">
         <div class="image-wrapper">
           <img src="${imgSrc(s.cover_path)}" alt="${esc(s.title)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
+          ${genreLabel}
+          <button class="sc-like${likeClass}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like song" aria-label="Like ${esc(s.title)}">♥</button>
+          <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})" aria-label="Play ${esc(s.title)}">${playIcon}</button>
         </div>
         <div class="card-details">
-          <h3 class="song-title" onclick="playSong(${s.id})">${esc(s.title)}</h3>
-          <p class="artist-name"><a href="${artistPath(s.artist)}" onclick="event.stopPropagation()" style="text-decoration:none;color:inherit">${esc(formatArtistNames(s.artist))}</a></p>
+          <div class="song-title">${esc(s.title)}</div>
+          <div class="artist-name"><a href="${artistPath(s.artist)}" onclick="event.stopPropagation()" style="text-decoration:none;color:inherit">${esc(formatArtistNames(s.artist))}${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</a></div>
         </div>
-      </div>`).join('');
+      </div>`; }).join('');
       } else {
         g.innerHTML += list.map((s, i) => `
       <div class="song-row${playIndex === songs.indexOf(s) && audio.src ? ' playing' : ''}" id="row-${s.id}">
@@ -10216,32 +10376,24 @@
       }
       if (!songs.length) { grid.innerHTML = '<p style="color:var(--muted);padding:20px;grid-column:1/-1;text-align:center">No songs found.</p>'; return; }
       grid.className = 'music-grid';
-      grid.innerHTML = songs.map(s => `
-    <div class="music-card" id="card-${gridId}-${s.id}" onclick="openSongDetail(${s.id})">
-      <div class="card-img-wrap">
+      grid.innerHTML = songs.map(s => {
+        const isPlaying = typeof playIndex !== 'undefined' && typeof audio !== 'undefined' && audio.src && playIndex === window.songs?.indexOf(s);
+        const genreLabel = s.genre ? `<span class="sc-genre">${esc(s.genre)}</span>` : '';
+        const tagBadge = tagLabel ? `<span style="position:absolute;top:6px;right:6px;background:${tagColor};color:white;font-size:9px;font-weight:800;padding:2px 7px;border-radius:50px">${tagLabel}</span>` : '';
+        return `
+    <div class="song-card${isPlaying ? ' playing' : ''}" id="card-${gridId}-${s.id}" onclick="playSong(${s.id})">
+      <div class="image-wrapper">
         <img src="${imgSrc(s.cover_path)}" loading="lazy" onerror="this.onerror=null;this.src=DEFAULT_COVER"/>
-        <div class="card-overlay">
-          <button class="ov-btn" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
-          <button class="ov-btn dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
-        </div>
-        ${genreTag(s.genre)}
-        ${tagLabel ? `<span style="position:absolute;top:8px;right:8px;background:${tagColor};color:white;font-size:9px;font-weight:800;padding:2px 7px;border-radius:50px">${tagLabel}</span>` : ''}
+        ${genreLabel}
+        ${tagBadge}
+        <button class="sc-like${s.liked ? ' liked' : ''}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like" aria-label="Like ${esc(s.title)}">♥</button>
+        <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})" aria-label="Play ${esc(s.title)}">▶</button>
       </div>
-      <div class="card-info">
-        <div class="card-title">${esc(s.title)}</div>
-        <a class="card-artist" href="${artistPath(s.artist)}" onclick="event.stopPropagation()" style="display:block;text-decoration:none;color:inherit">
-          ${esc(formatArtistNames(s.artist))}
-          ${s.uploader_verified === 'approved' ? '<span style="color:#3b82f6;font-size:10px;margin-left:4px" title="Verified Artist">✓ Verified</span>' : ''}
-        </a>
-        <div class="card-meta"><span>${s.duration || '3:00'}</span><span>▶ ${(s.play_count || 0).toLocaleString()}</span></div>
-        <div class="card-actions">
-          <button class="like-btn${s.liked ? ' liked' : ''}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like">♥</button>
-          <button onclick="event.stopPropagation();playSong(${s.id})" style="background:var(--pink);border:none;border-radius:50px;color:white;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">▶ Play</button>
-          <button class="dl-btn-sm" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')">⬇</button>
-          <button onclick="event.stopPropagation();copySongLink(${s.id},'${esc(s.title)}')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--muted);padding:2px 4px" title="Copy link">🔗</button>
-        </div>
+      <div class="card-details">
+        <div class="song-title">${esc(s.title)}</div>
+        <div class="artist-name"><a href="${artistPath(s.artist)}" onclick="event.stopPropagation()" style="text-decoration:none;color:inherit">${esc(formatArtistNames(s.artist))}${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</a></div>
       </div>
-    </div>`).join('');
+    </div>`; }).join('');
     }
 
     // 1. Kadongo Kamu Special — classic artists like Kafeero, Matovu, Ndugwa

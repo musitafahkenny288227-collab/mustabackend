@@ -152,11 +152,14 @@ function serveArtistPage(artistName, songs, requestUrl) {
   const genres = [...new Set(songs.map(s => s.genre).filter(Boolean))].slice(0, 3);
   const genreText = genres.length > 0 ? genres.join(', ') : 'Ugandan Music';
   
-  // Use first song's cover if available, or artist's cover
-  const coverUrl = songs.find(s => s.cover_image || s.cover_path)
+  // Use first song's cover if available, or artist's cover — proxy through weserv.nl
+  const coverDirect = songs.find(s => s.cover_image || s.cover_path)
     ? (songs[0].cover_image || songs[0].cover_path).startsWith('http')
       ? (songs[0].cover_image || songs[0].cover_path)
       : `${API_BASE}${songs[0].cover_image || songs[0].cover_path}`
+    : DEFAULT_IMG;
+  const coverUrl = coverDirect !== DEFAULT_IMG
+    ? `https://images.weserv.nl/?url=${encodeURIComponent(coverDirect)}&w=1200&h=630&fit=cover&output=jpg&q=85`
     : DEFAULT_IMG;
 
   const totalStreams = songs.reduce((sum, s) => sum + (Number(s.play_count) || 0), 0);
@@ -482,8 +485,14 @@ function serveSongPage(song, requestUrl) {
   const artistSlug  = createSlug(song.artist);
   const songUrl     = `${SITE_URL}/song/${slug}/${artistSlug}`;
   const coverRaw    = song.cover_image || song.cover_path || '';
-  const coverUrl    = coverRaw
+  const coverDirect = coverRaw
     ? (coverRaw.startsWith('http') ? coverRaw : `${API_BASE}${coverRaw}`)
+    : DEFAULT_IMG;
+  // Proxy through images.weserv.nl so WhatsApp/Facebook crawlers can always
+  // fetch the image — R2/CDN URLs sometimes block social media bots directly.
+  // Also forces a 1200x630 crop which is the ideal OG image size.
+  const coverUrl = coverRaw
+    ? `https://images.weserv.nl/?url=${encodeURIComponent(coverDirect)}&w=1200&h=630&fit=cover&output=jpg&q=85`
     : DEFAULT_IMG;
 
   const pageTitle   = `${song.title} by ${song.artist} — Stream & Download Free | ${SITE_NAME}`;
@@ -548,6 +557,8 @@ function serveSongPage(song, requestUrl) {
 <meta property="og:image" content="${escHtml(coverUrl)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:alt" content="${escHtml(song.title)} by ${escHtml(song.artist)} — DJ Musta Music">
 <meta property="og:url" content="${songUrl}">
 <meta property="og:site_name" content="${SITE_NAME}">
 <meta property="music:musician" content="${escHtml(song.artist)}">
