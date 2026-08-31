@@ -3093,13 +3093,11 @@
     }
 
     #musicSections .music-grid {
-      display: flex;
-      flex-direction: row;
-      gap: 10px;
-      overflow-x: auto;
-      overflow-y: hidden;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      overflow-x: visible;
       padding-bottom: 8px;
-      -webkit-overflow-scrolling: touch;
     }
 
     .music-list-header {
