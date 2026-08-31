@@ -383,34 +383,30 @@ function serveArtistNotFound(artistName) {
 // ────────────────────────────────────────────────────────────
 async function fetchSongBySlug(slug) {
   if (!slug) return null;
-  
-  // slug can be "title-slug/artist-slug" or just "title-slug"
+
   const parts = slug.split('/');
   const titleSlug = parts[0];
   const artistSlug = parts[1] || null;
   if (!titleSlug) return null;
-  
-  // Convert slug back to search term
+
   const searchTerm = titleSlug.replace(/-/g, ' ');
 
+  const trySearch = async (term, limit = 20) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/songs?search=${encodeURIComponent(term)}&limit=${limit}`,
+        { headers: { 'User-Agent': 'DJMusta-SEO-Bot/1.0' }, signal: AbortSignal.timeout(8000) }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data.songs) ? data.songs : [];
+    } catch (e) { return []; }
+  };
+
   try {
-    // Try search endpoint with generous limit
-    const res = await fetch(
-      `${API_BASE}/api/songs?search=${encodeURIComponent(searchTerm)}&limit=20`,
-      { 
-        headers: { 'User-Agent': 'DJMusta-SEO-Bot/1.0' },
-        signal: AbortSignal.timeout(8000)
-      }
-    );
+    let songs = await trySearch(searchTerm, 20);
 
-    if (!res.ok) throw new Error(`API search returned ${res.status}`);
-
-    const data = await res.json();
-    const songs = Array.isArray(data.songs) ? data.songs : [];
-
-    if (!songs.length) return null;
-
-    // 1. Exact match: both title and artist slug match
+    // 1. Exact: title slug + artist slug both match
     if (artistSlug) {
       const exact = songs.find(s =>
         s && s.title && s.artist &&
@@ -420,39 +416,48 @@ async function fetchSongBySlug(slug) {
       if (exact) return exact;
     }
 
-    // 2. Title slug matches exactly (ignore artist)
-    const titleMatch = songs.find(s =>
-      s && s.title && createSlug(s.title) === titleSlug
-    );
+    // 2. Title slug exact match
+    const titleMatch = songs.find(s => s && s.title && createSlug(s.title) === titleSlug);
     if (titleMatch) return titleMatch;
 
-    // 3. Fuzzy: title slug starts with or contains the search slug
+    // 3. Combined slug — e.g. song titled "Embuzi - Nandor Love" has slug
+    //    "embuzi-nandor-love" but URL was split as /song/embuzi/nandor-love
+    if (artistSlug) {
+      const combined = titleSlug + '-' + artistSlug;
+      const combinedMatch = songs.find(s => s && s.title && createSlug(s.title) === combined);
+      if (combinedMatch) return combinedMatch;
+
+      // Also search combined term
+      const songs2 = await trySearch(searchTerm + ' ' + artistSlug.replace(/-/g, ' '), 10);
+      const m2 = songs2.find(s =>
+        s && s.title && (
+          createSlug(s.title) === titleSlug ||
+          createSlug(s.title) === combined ||
+          (s.artist && createSlug(s.artist) === artistSlug)
+        )
+      );
+      if (m2) return m2;
+      if (songs2.length && !songs.length) songs = songs2;
+    }
+
+    // 4. Fuzzy: song slug starts with our title slug
     const fuzzy = songs.find(s =>
-      s && s.title && createSlug(s.title).includes(titleSlug.substring(0, 20))
+      s && s.title && createSlug(s.title).startsWith(titleSlug.substring(0, 15))
     );
     if (fuzzy) return fuzzy;
 
-    // 4. Return first result if only one word search term (common for short titles)
-    if (searchTerm.split(' ').length <= 2) return songs[0];
+    // 5. Return first result as last resort
+    if (songs.length) return songs[0];
 
     return null;
 
   } catch (err) {
     console.warn('Worker song search error:', err.message);
-    
-    // Fallback: try numeric ID if slug is a number
     if (/^\d+$/.test(titleSlug)) {
       try {
-        const res2 = await fetch(`${API_BASE}/api/songs/${titleSlug}`, {
-          signal: AbortSignal.timeout(8000)
-        });
-        if (res2.ok) {
-          const data2 = await res2.json();
-          return data2.song || data2 || null;
-        }
-      } catch (e) {
-        console.warn('Worker numeric ID fallback failed:', e.message);
-      }
+        const r = await fetch(`${API_BASE}/api/songs/${titleSlug}`, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) { const d = await r.json(); return d.song || d || null; }
+      } catch (e) {}
     }
     return null;
   }
