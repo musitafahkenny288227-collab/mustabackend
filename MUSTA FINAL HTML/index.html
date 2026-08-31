@@ -121,6 +121,13 @@
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-RXCS6LWMP9');
+
+    // ── Custom event helper ───────────────────────────────────
+    window.trackEvent = function(eventName, params) {
+      try {
+        if (typeof gtag === 'function') gtag('event', eventName, params || {});
+      } catch(e) {}
+    };
   </script>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5643971001419675"
     crossorigin="anonymous"></script>
@@ -542,10 +549,10 @@
       background: linear-gradient(135deg, #a855f7, #6366f1);
       border: none;
       color: white;
-      padding: 11px 24px;
+      padding: 4px 8px;
       border-radius: 50px;
-      font-weight: 700;
-      font-size: 14px;
+      font-weight: 600;
+      font-size: 11px;
       cursor: pointer;
       box-shadow: 0 4px 24px rgba(168, 85, 247, 0.4);
       transition: all 0.2s ease;
@@ -640,8 +647,8 @@
         flex: 0 0 auto !important;
         min-width: 0 !important;
         max-width: none !important;
-        padding: 10px 20px;
-        font-size: 13px;
+        padding: 4px 10px;
+        font-size: 10px;
         white-space: nowrap;
       }
 
@@ -1008,12 +1015,13 @@
     </div>
     <!-- SEARCH -->
     <div id="headerSearch"
-      style="display:flex;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);border-radius:50px;padding:3px;flex:1;max-width:400px;min-width:100px">
+      style="display:flex;align-items:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);border-radius:50px;padding:3px 12px;flex:1;max-width:400px;min-width:100px;gap:6px">
+      <span style="color:rgba(255,255,255,.5);font-size:16px;flex-shrink:0">🔍</span>
       <input id="searchInput" placeholder="Search songs, artists..." data-translate="search_placeholder"
-        style="background:transparent;border:none;padding:8px 12px;color:white;width:100%;font-size:13px;outline:none;font-family:inherit"
+        style="background:transparent;border:none;padding:8px 4px;color:white;width:100%;font-size:13px;outline:none;font-family:inherit"
         oninput="onSearch(this.value)" />
       <button onclick="onSearch(document.getElementById('searchInput').value)"
-        style="background:linear-gradient(135deg,#a855f7,#9333ea);border:none;padding:7px 14px;border-radius:50px;color:white;font-weight:700;font-size:12px;white-space:nowrap">Search</button>
+        style="background:rgba(168,85,247,.7);border:none;padding:4px 8px;border-radius:50px;color:white;font-weight:600;font-size:10px;white-space:nowrap;flex-shrink:0;transition:all .2s ease" title="Search">Search</button>
     </div>
     <!-- RIGHT BUTTONS -->
     <div id="headerRight" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -1037,8 +1045,8 @@
         title="Turn on notifications for new songs">🔕</button>
       <!-- APK Download button -->
       <button id="headerApkBtn" onclick="downloadAPK()"
-        style="display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:white;padding:8px 13px;border-radius:50px;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer"
-        title="Download App"><svg class="apk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z" fill="currentColor" stroke="none" /></svg><span>Download App</span></button>
+        style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10b981,#059669);border:none;color:white;padding:4px 8px;border-radius:50px;font-size:10px;font-weight:600;white-space:nowrap;cursor:pointer"
+        title="Download App">Download</button>
       <!-- Always-visible upload shortcut -->
       <button id="headerUploadBtn" onclick="currentUser ? showSection('uploadSection') : showAuth('login')"
         style="display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,#ec4899,#a855f7);border:none;color:white;padding:8px 13px;border-radius:50px;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer"
@@ -1136,22 +1144,43 @@
     #headerSearch {
       height: 42px;
       max-width: 600px !important;
-      background: #121d32 !important;
-      border: 1px solid #334968 !important;
-      border-radius: 9px !important;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, .16) !important;
+      background: linear-gradient(135deg, rgba(18, 29, 50, .9), rgba(30, 41, 59, .8)) !important;
+      border: 1px solid rgba(148, 163, 184, .2) !important;
+      border-radius: 50px !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .25) !important;
+      transition: all .3s ease !important;
+    }
+
+    #headerSearch:hover {
+      border-color: rgba(168, 85, 247, .3) !important;
+      box-shadow: 0 4px 16px rgba(168, 85, 247, .15) !important;
+    }
+
+    #headerSearch:focus-within {
+      border-color: rgba(168, 85, 247, .5) !important;
+      box-shadow: 0 4px 20px rgba(168, 85, 247, .2) !important;
     }
 
     #searchInput::placeholder {
       color: #a8b2c7;
     }
 
+    #searchInput:focus {
+      background: rgba(255, 255, 255, .03);
+    }
+
     #headerSearch button {
       min-width: 76px;
-      background: #f59e0b !important;
-      color: #17110a !important;
-      border-radius: 7px !important;
-      box-shadow: none !important;
+      background: linear-gradient(135deg, #a855f7, #9333ea) !important;
+      color: white !important;
+      border-radius: 40px !important;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, .3) !important;
+      transition: all .2s ease !important;
+    }
+
+    #headerSearch button:hover {
+      box-shadow: 0 4px 12px rgba(168, 85, 247, .5) !important;
+      transform: translateY(-1px);
     }
 
     #headerRight {
@@ -1559,7 +1588,7 @@
     </div>
 
     <!-- Hero text content -->
-    <div class="hero-inner" style="justify-content:center;text-align:center;padding:32px 20px">
+    <div class="hero-inner" style="justify-content:center;text-align:center;padding:24px 16px">
       <div class="hero-left" style="align-items:center;max-width:600px">
         <div class="hero-badge" aria-label="Logo badge">🎵</div>
         <h1 class="hero-heading" style="align-items:center">
@@ -1581,10 +1610,9 @@
               class="hero-stat-label">Plays</span></div>
         </div>
         <!-- Hero Action Buttons -->
-        <div class="hero-actions" style="display:flex;gap:12px;margin-top:16px;justify-content:center">
-          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:8px;width:auto;max-width:220px;padding:11px 24px;flex-shrink:0">
-            <span style="font-size:16px">📱</span>
-            <span>Download App</span>
+        <div class="hero-actions" style="display:flex;gap:6px;margin-top:10px;justify-content:center">
+          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:3px;width:auto;max-width:150px;padding:4px 8px;flex-shrink:0">
+            <span>Download</span>
           </button>
         </div>
       </div>
@@ -3029,9 +3057,13 @@
     }
 
     .music-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 8px;
+      -webkit-overflow-scrolling: touch;
     }
 
     .music-list {
@@ -3045,13 +3077,21 @@
     }
 
     #songsGrid.music-grid {
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
     #musicSections .music-grid {
-      grid-template-columns: repeat(3, 1fr);
+      display: flex;
+      flex-direction: row;
       gap: 10px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 8px;
+      -webkit-overflow-scrolling: touch;
     }
 
     .music-list-header {
@@ -3739,10 +3779,10 @@
     /* ── LARGE DESKTOP (1440px+) ────────────────────────────── */
     @media (min-width: 1440px) {
       .music-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         grid-auto-flow: row;
         overflow-x: visible;
-        gap: 16px;
+        gap: 14px;
       }
 
       [style*="max-width:1240px"] {
@@ -3753,20 +3793,20 @@
     /* ── DESKTOP (1200px–1439px) ────────────────────────────── */
     @media (min-width: 1200px) and (max-width: 1439px) {
       .music-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         grid-auto-flow: row;
         overflow-x: visible;
-        gap: 14px;
+        gap: 12px;
       }
     }
 
     /* ── TABLET LANDSCAPE (1024px–1199px) ───────────────────── */
     @media (min-width: 1024px) and (max-width: 1199px) {
       .music-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         grid-auto-flow: row;
         overflow-x: visible;
-        gap: 12px;
+        gap: 10px;
       }
 
       #audioPlayer>div {
@@ -6134,6 +6174,8 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      flex-shrink: 0;
+      width: clamp(120px, 25vw, 160px);
     }
 
     .image-wrapper img,
@@ -6147,15 +6189,15 @@
     /* Text Container */
     .card-details,
     .card-info {
-      padding: 10px;
+      padding: 8px;
       text-align: left;
     }
 
     .song-title,
     .card-title {
-      font-size: 1rem;
+      font-size: 0.9rem;
       font-weight: bold;
-      margin: 0 0 4px 0;
+      margin: 0 0 3px 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -6163,7 +6205,7 @@
 
     .artist-name,
     .card-artist {
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       color: #8a92a6;
       margin: 0;
       white-space: nowrap;
@@ -6411,6 +6453,7 @@
         closeAuth();
         updateUI();
         showToast('✅ Signed in with Google!', '🎉');
+        trackEvent('login', { method: 'google' });
         loadSongs(true);
         setTimeout(checkUsernamePrompt, 1000);
       } catch (e) {
@@ -6918,6 +6961,7 @@
       search = val.trim();
       clearTimeout(onSearch._t);
       onSearch._t = setTimeout(() => {
+        if (search) trackEvent('search', { search_term: search });
         genre = ''; category = 'all';
         const artistsVisible = document.getElementById('artistsSection')?.style.display !== 'none';
         if (artistsVisible && search) {
@@ -6986,6 +7030,7 @@
         const res = await api('/songs/' + id + '/like', { method: 'POST' });
         btn.classList.toggle('liked');
         showToast(liked ? 'Removed from likes' : 'Added to likes', liked ? '💔' : '❤️');
+        trackEvent(liked ? 'unlike_song' : 'like_song', { song_id: id });
 
         // Update like count in song object
         const s = songs.find(x => x.id === id);
@@ -7297,6 +7342,11 @@
       
       currentSongData = s;
       playIndex = songs.indexOf(s);
+      
+      // Track play event in Google Analytics
+      trackEvent('play_song', { song_id: id, song_title: s.title, artist: s.artist, genre: s.genre || 'unknown' });
+      // Smart push prompt: count plays
+      if (window._trackPlayForPrompt) window._trackPlayForPrompt();
       
       // Always proxy through backend — direct R2 URLs have no CORS headers
       // and will fail in browsers with crossOrigin='anonymous' set
@@ -7647,6 +7697,9 @@
       const coverSource = song?.cover_path || song?.cover_image || song?.coverImage || song?.cover || DEFAULT_COVER;
       const downloadName = `${title} - ${song?.artist || 'DJ Musta'} - Downloaded from DJ Musta.mp3`
         .replace(/[\\/:*?"<>|]/g, '-');
+
+      // Track download in Google Analytics
+      trackEvent('download_song', { song_id: id, song_title: title, artist: song?.artist || 'unknown', genre: song?.genre || 'unknown' });
 
       console.log('📥 downloadSong called:', { id, title, url, song, coverSource, backendUrl });
       showToast('Downloading ' + title, '⬇️');
@@ -9284,22 +9337,46 @@
         }, 800);
       }
 
-      // PWA install prompt
+      // PWA install prompt — show as a nice bottom banner
       let deferredPrompt;
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        const btn = document.getElementById('pwaInstallBtn');
-        if (btn) btn.style.display = 'flex';
+        // Show banner only if not already dismissed this session
+        if (!sessionStorage.getItem('pwa_banner_dismissed')) {
+          setTimeout(() => showPWABanner(), 8000); // show after 8s
+        }
       });
       window.pwaInstall = async function () {
         if (!deferredPrompt) return showToast('Already installed or not supported', 'ℹ️');
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         deferredPrompt = null;
-        if (outcome === 'accepted') showToast('App installed!', '✅');
-        document.getElementById('pwaInstallBtn').style.display = 'none';
+        if (outcome === 'accepted') {
+          showToast('App installed!', '✅');
+          trackEvent('pwa_install', { outcome: 'accepted' });
+        }
+        document.getElementById('pwaBanner')?.remove();
       };
+      function showPWABanner() {
+        if (document.getElementById('pwaBanner')) return;
+        const banner = document.createElement('div');
+        banner.id = 'pwaBanner';
+        banner.style.cssText = 'position:fixed;bottom:70px;left:0;right:0;z-index:9991;padding:0 12px;pointer-events:none';
+        banner.innerHTML = `
+          <div style="background:linear-gradient(135deg,#1e1b4b,#2d1b4e);border:1px solid rgba(168,85,247,.45);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);pointer-events:all;max-width:480px;margin:0 auto">
+            <div style="font-size:28px;flex-shrink:0">📱</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:800;font-size:14px;color:white">Install DJ Musta App</div>
+              <div style="font-size:12px;color:#94A3B8;margin-top:2px">Listen offline & get faster loading</div>
+            </div>
+            <button onclick="window.pwaInstall()" style="background:linear-gradient(135deg,#a855f7,#6366f1);color:white;border:none;padding:8px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;flex-shrink:0">Install</button>
+            <button onclick="document.getElementById('pwaBanner').remove();sessionStorage.setItem('pwa_banner_dismissed','1')" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">✕</button>
+          </div>`;
+        document.body.appendChild(banner);
+        // Auto-hide after 12s
+        setTimeout(() => banner.remove(), 12000);
+      }
     }
 
     // ============================================================
@@ -11128,12 +11205,14 @@
   }
 
   // ── ADD TO QUEUE ─────────────────────────────────────────────
-  let queue = [];
+  let queue = JSON.parse(localStorage.getItem('djm_queue') || '[]');
+  function saveQueue() { try { localStorage.setItem('djm_queue', JSON.stringify(queue)); } catch(e) {} }
   function addToQueue(id) {
-    const s = songs.find(x => x.id === id);
+    const s = songs.find(x => x.id === id) || playableSongCatalog?.get(String(id));
     if (!s) return showToast('Song not found', '❌');
     if (queue.find(x => x.id === id)) return showToast('Already in queue', 'ℹ️');
     queue.push(s);
+    saveQueue();
     showToast(`"${s.title}" added to queue`, '📋');
     updateQueuePanel();
   }
@@ -11148,8 +11227,8 @@
         <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
         <div style="font-size:11px;color:var(--muted)">${esc(s.artist)}</div>
       </div>
-      <button onclick="playSong(${s.id});queue.splice(${i},1);updateQueuePanel()" style="background:var(--pink);border:none;color:white;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:12px">▶</button>
-      <button onclick="queue.splice(${i},1);updateQueuePanel()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">✕</button>
+      <button onclick="playSong(${s.id});queue.splice(${i},1);saveQueue();updateQueuePanel()" style="background:var(--pink);border:none;color:white;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:12px">▶</button>
+      <button onclick="queue.splice(${i},1);saveQueue();updateQueuePanel()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">✕</button>
     </div>`).join('');
   }
 
@@ -11239,13 +11318,39 @@
     } catch (e) { }
   })();
 
-  // ── PWA INSTALL BUTTON ───────────────────────────────────────
-  const pwaBtn = document.createElement('button');
-  pwaBtn.id = 'pwaInstallBtn';
-  pwaBtn.style = 'display:none;position:fixed;bottom:90px;left:16px;background:var(--pink);color:white;border:none;padding:10px 18px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;z-index:9990;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(168,85,247,.4)';
-  pwaBtn.innerHTML = '📱 Install App';
-  pwaBtn.onclick = () => window.pwaInstall && window.pwaInstall();
-  document.body.appendChild(pwaBtn);
+  // ── PWA INSTALL BANNER (shown via beforeinstallprompt above) ─
+  // No floating button needed — banner is shown automatically
+
+  // ── SMART PUSH NOTIFICATION PROMPT ──────────────────────────
+  // Show after user plays 3 songs and hasn't been prompted before
+  let _playCountForPrompt = parseInt(localStorage.getItem('djm_play_count_prompt') || '0');
+  window._trackPlayForPrompt = function() {
+    if (localStorage.getItem('djm_push_subscribed') === '1') return; // already subscribed
+    if (localStorage.getItem('djm_push_prompted') === '1') return;   // already prompted
+    _playCountForPrompt++;
+    localStorage.setItem('djm_play_count_prompt', _playCountForPrompt);
+    if (_playCountForPrompt === 3) {
+      setTimeout(showPushPromptBanner, 1500);
+    }
+  };
+  function showPushPromptBanner() {
+    if (document.getElementById('pushPromptBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'pushPromptBanner';
+    banner.style.cssText = 'position:fixed;bottom:70px;left:0;right:0;z-index:9992;padding:0 12px;pointer-events:none';
+    banner.innerHTML = `
+      <div style="background:linear-gradient(135deg,#0f2744,#1a1f3a);border:1px solid rgba(59,130,246,.45);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);pointer-events:all;max-width:480px;margin:0 auto">
+        <div style="font-size:28px;flex-shrink:0">🔔</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:14px;color:white">Get New Song Alerts</div>
+          <div style="font-size:12px;color:#94A3B8;margin-top:2px">Never miss a new Ugandan banger</div>
+        </div>
+        <button onclick="subscribeToPush();document.getElementById('pushPromptBanner').remove();localStorage.setItem('djm_push_prompted','1')" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;border:none;padding:8px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;flex-shrink:0">Allow</button>
+        <button onclick="document.getElementById('pushPromptBanner').remove();localStorage.setItem('djm_push_prompted','1')" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">✕</button>
+      </div>`;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 15000);
+  }
 
   // ── BACK TO TOP BUTTON ───────────────────────────────────────
   const topBtn = document.createElement('button');
