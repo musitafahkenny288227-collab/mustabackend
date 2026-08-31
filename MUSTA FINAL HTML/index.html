@@ -1610,9 +1610,9 @@
               class="hero-stat-label">Plays</span></div>
         </div>
         <!-- Hero Action Buttons -->
-        <div class="hero-actions" style="display:flex;gap:6px;margin-top:10px;justify-content:center">
-          <button class="hero-btn-primary" onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:3px;width:auto;max-width:150px;padding:4px 8px;flex-shrink:0">
-            <span>Download</span>
+        <div style="display:flex;justify-content:center;margin-top:10px">
+          <button onclick="downloadAPK()" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#a855f7,#6366f1);color:white;border:none;padding:10px 22px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;box-shadow:0 4px 16px rgba(168,85,247,.4)">
+            <span>📱</span><span>Download App</span>
           </button>
         </div>
       </div>
@@ -1742,8 +1742,11 @@
 
       .time-btn {
         font-size: 12px;
-        padding: 5px 11px;
+        padding: 5px 10px;
         flex-shrink: 0;
+      }
+      #timeFilterBar > span {
+        display: none;
       }
     }
   </style>
