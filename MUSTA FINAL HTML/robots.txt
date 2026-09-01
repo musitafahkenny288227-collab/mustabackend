@@ -1,7 +1,27 @@
+# DJ Musta Music - robots.txt
+# https://djmusta.com
+
 User-agent: *
 Allow: /
+Allow: /song/
+Allow: /gospel
+Allow: /new-music
+Allow: /top-songs
+Allow: /top-artists
+Allow: /nonstops
+
+# Block private/admin areas
 Disallow: /api/
 Disallow: /admin
 Disallow: /admin/
+Disallow: /*.json$
 
+# Allow specific bots full access
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Sitemap location
 Sitemap: https://djmusta.com/sitemap.xml
