@@ -629,106 +629,79 @@
       body {
         padding-bottom: 180px;
       }
-
-      /* ── MOBILE PLAYER: Compact 2-row layout ─────────────── */
       #audioPlayer {
         bottom: 56px !important;
-        left: 4px !important;
-        right: 4px !important;
+        left: 6px !important;
+        right: 6px !important;
         border-radius: 14px !important;
         border: 1px solid rgba(168,85,247,.35) !important;
+        border-top: 2px solid #a855f7 !important;
         border-left: none !important;
-        padding: 8px 10px !important;
-        background: rgba(15,18,35,.97) !important;
+        padding: 8px !important;
+        background: rgba(10,14,30,.97) !important;
       }
-
-      /* Row 1: cover + title/artist + pause + download */
+      /* Player inner: 2-col grid — cover | info */
       #audioPlayer>div {
         display: grid !important;
-        grid-template-columns: 46px 1fr !important;
-        gap: 0 8px !important;
-        padding: 0 !important;
+        grid-template-columns: 48px minmax(0,1fr) !important;
+        gap: 0 !important;
         align-items: center !important;
+        padding: 0 !important;
       }
-
+      /* Cover */
       #audioPlayer>div>div:first-child {
-        width: 46px !important;
-        height: 46px !important;
-        min-width: 46px !important;
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
         margin: 0 !important;
         border-radius: 8px !important;
-        grid-row: 1 !important;
       }
-
+      /* Info column */
       #audioPlayer>div>div:nth-child(2) {
-        padding: 0 !important;
+        padding: 0 0 0 8px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 2px !important;
+        gap: 3px !important;
         min-width: 0 !important;
       }
-
-      /* Title + artist + close row */
+      /* Title row: title + close + download */
       #audioPlayer>div>div:nth-child(2)>div:first-child {
         display: flex !important;
         align-items: center !important;
-        justify-content: space-between !important;
         gap: 6px !important;
         margin-bottom: 0 !important;
       }
-
       #playerTitle {
-        font-size: 13px !important;
+        font-size: 12px !important;
         font-weight: 700 !important;
+        flex: 1 !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
-        flex: 1 !important;
-        min-width: 0 !important;
       }
-
       #playerArtist {
-        font-size: 11px !important;
+        font-size: 10px !important;
         color: #a855f7 !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
       }
-
-      /* Progress bar row */
+      /* Progress bar */
       #audioPlayer>div>div:nth-child(2)>div:nth-child(2) {
-        margin: 2px 0 !important;
+        margin: 1px 0 !important;
       }
-
       #currentTime, #totalTime {
-        font-size: 10px !important;
+        display: none !important;
       }
-
-      /* Play button on cover - smaller */
-      #playPauseBtn {
-        font-size: 18px !important;
-      }
-
-      /* Download button */
-      #mobileDownloadBtn {
-        display: inline-flex !important;
-        min-width: 32px !important;
-        min-height: 32px !important;
-        padding: 4px 8px !important;
-        font-size: 14px !important;
-        flex-shrink: 0 !important;
-      }
-
-      /* Controls row: horizontal scroll, hide non-essential */
+      /* Controls row — horizontal scroll, no wrap */
       #audioPlayer>div>div:nth-child(2)>div:nth-child(3) {
         display: flex !important;
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
-        overflow-y: hidden !important;
         scrollbar-width: none !important;
-        gap: 4px !important;
+        gap: 2px !important;
         align-items: center !important;
-        padding-bottom: 2px !important;
+        min-height: 32px !important;
       }
       #audioPlayer>div>div:nth-child(2)>div:nth-child(3)::-webkit-scrollbar {
         display: none !important;
@@ -736,27 +709,26 @@
       #audioPlayer>div>div:nth-child(2)>div:nth-child(3)>* {
         flex-shrink: 0 !important;
       }
-
-      /* Hide volume slider + speed on mobile — accessed via long press */
-      #volumeBar, #speedControl, #playerStats { display: none !important; }
-
-      /* Shuffle, repeat, prev, next — smaller */
-      #shuffleBtn, #repeatBtn {
+      /* Hide non-essential controls on mobile */
+      #volumeBar, #playerStats, #speedControl {
+        display: none !important;
+      }
+      /* Control buttons smaller */
+      #audioPlayer>div>div:nth-child(2)>div:nth-child(3)>button {
         font-size: 14px !important;
         padding: 2px 5px !important;
-        min-width: 28px !important;
-        min-height: 28px !important;
-      }
-      #audioPlayer button[onclick="prevSong()"],
-      #audioPlayer button[onclick="nextSong()"] {
-        font-size: 16px !important;
-        padding: 2px 4px !important;
         min-height: 28px !important;
       }
       #dlBtn {
-        padding: 4px 10px !important;
-        font-size: 11px !important;
-        white-space: nowrap !important;
+        padding: 4px 8px !important;
+        font-size: 10px !important;
+      }
+      #mobileDownloadBtn {
+        display: none !important;
+      }
+      /* Play/pause on cover */
+      #playPauseBtn {
+        font-size: 18px !important;
       }
       .music-grid {
         grid-template-columns: none !important;
