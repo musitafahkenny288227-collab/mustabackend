@@ -2972,7 +2972,7 @@
 
         // Set ID3 tags: title, artist, album (djmusta), genre, comment
         writer
-          .setFrame('TIT2', title)
+          .setFrame('TIT2', `${title} | www.djmusta.com`)
           .setFrame('TPE1', [artist])
           .setFrame('TALB', 'DJ Musta Music — www.djmusta.com')
           .setFrame('TCON', [genre])
@@ -3040,46 +3040,70 @@
         canvas.height = size;
         const ctx = canvas.getContext('2d');
 
-        // Draw image
+        // Draw original image
         ctx.drawImage(img, 0, 0, size, size);
 
-        // Bottom gradient bar
-        const barH = Math.round(size * 0.22);
+        // ── DIAGONAL www.djmusta.com WATERMARK (center, semi-transparent) ──
+        ctx.save();
+        ctx.translate(size / 2, size / 2);
+        ctx.rotate(-Math.PI / 6); // -30 degrees
+        const wmSize = Math.max(22, Math.round(size * 0.055));
+        ctx.font = `800 ${wmSize}px Arial, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Repeat watermark 3 rows
+        for (let row = -1; row <= 1; row++) {
+          ctx.fillText('www.djmusta.com', 0, row * wmSize * 2.5);
+        }
+        ctx.restore();
+
+        // ── BOTTOM BAR: song title + artist ──
+        const barH = Math.round(size * 0.26);
         const grad = ctx.createLinearGradient(0, size - barH, 0, size);
         grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(1, 'rgba(0,0,0,0.85)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.75)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.92)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, size - barH, size, barH);
 
+        const maxW = size * 0.88;
+
         // Song title
-        const titleSize = Math.max(18, Math.round(size * 0.048));
+        const titleSize = Math.max(20, Math.round(size * 0.052));
         ctx.fillStyle = '#ffffff';
         ctx.font = `700 ${titleSize}px Arial, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        const maxW = size * 0.88;
         let displayTitle = title;
         while (ctx.measureText(displayTitle).width > maxW && displayTitle.length > 4) {
           displayTitle = displayTitle.slice(0, -1);
         }
         if (displayTitle !== title) displayTitle += '…';
-        ctx.fillText(displayTitle, size / 2, size - barH * 0.42);
+        ctx.fillText(displayTitle, size / 2, size - barH * 0.44);
 
         // Artist name
-        const artistSize = Math.max(13, Math.round(size * 0.033));
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        const artistSize = Math.max(15, Math.round(size * 0.036));
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.font = `600 ${artistSize}px Arial, sans-serif`;
-        ctx.fillText(artist, size / 2, size - barH * 0.15);
+        ctx.fillText(artist, size / 2, size - barH * 0.18);
 
-        // www.djmusta.com label — top right
-        const labelSize = Math.max(11, Math.round(size * 0.028));
-        ctx.fillStyle = 'rgba(168,85,247,0.9)';
-        ctx.font = `800 ${labelSize}px Arial, sans-serif`;
-        ctx.textAlign = 'right';
+        // ── TOP BAR: www.djmusta.com prominent label ──
+        const topBarH = Math.round(size * 0.1);
+        const topGrad = ctx.createLinearGradient(0, 0, 0, topBarH);
+        topGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
+        topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = topGrad;
+        ctx.fillRect(0, 0, size, topBarH);
+
+        const siteSize = Math.max(16, Math.round(size * 0.042));
+        ctx.fillStyle = '#a855f7';
+        ctx.font = `800 ${siteSize}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText('www.djmusta.com', size - 10, 10);
+        ctx.fillText('www.djmusta.com', size / 2, Math.round(size * 0.018));
 
-        const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+        const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
         return await outBlob.arrayBuffer();
       } catch (e) {
         console.warn('Cover watermark failed:', e);
