@@ -59,6 +59,22 @@
       messagingSenderId: '331595596257',
       appId: '1:331595596257:web:2e68d35ccfd48ba03112a0'
     };
+    // trackEvent — safe wrapper for Google Analytics custom events
+    // Defined early so it's always available before any other script runs
+    window.trackEvent = function(eventName, params) {
+      try {
+        if (typeof gtag === 'function') gtag('event', eventName, params || {});
+      } catch(e) {}
+    };
+  </script>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-RXCS6LWMP9"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-RXCS6LWMP9');
   </script>
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
