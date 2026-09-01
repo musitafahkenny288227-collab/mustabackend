@@ -2944,26 +2944,146 @@
     // DOWNLOAD
     // ============================================================
     async function downloadSong(id, title, filePath) {
-      const song = songs.find(item => String(item.id) === String(id));
-      const coverSource = song?.cover_path || song?.cover_image || DEFAULT_COVER;
-      const downloadName = `${title} - ${song?.artist || 'DJ Musta'}.mp3`.replace(/[\\/:*?"<>|]/g, '-');
+      const song = songs.find(item => String(item.id) === String(id)) || { title, artist: 'Unknown', genre: 'Ugandan Music' };
+      const artist = song.artist || 'DJ Musta';
+      const genre = song.genre || 'Ugandan Music';
+      const coverSource = song.cover_path || song.cover_image || DEFAULT_COVER;
+      const backendUrl = API + '/api/songs/' + id + '/download-file';
+      const cleanName = `${title} - ${artist} [www.djmusta.com].mp3`.replace(/[\\/:*?"<>|]/g, '-');
 
-      showToast('Downloading ' + title, '⬇️');
+      showToast('Downloading ' + title + '...', '⬇️');
+
       try {
-        const backendUrl = API + '/api/songs/' + id + '/download-file';
-        const response = await fetch(backendUrl);
-        if (!response.ok) throw new Error('Download failed');
-        const blob = await response.blob();
+        // Try ID3-tagged download using browser-id3-writer
+        const ID3Writer = window.ID3Writer;
+        if (!ID3Writer) throw new Error('ID3 writer not ready');
+
+        const coverUrl = imgSrc(coverSource);
+        const coverProxy = 'https://images.weserv.nl/?url=' + encodeURIComponent(coverUrl) + '&w=500&h=500&fit=cover&output=jpg&q=85';
+
+        const [audioRes, coverRes] = await Promise.all([
+          fetch(backendUrl),
+          fetch(coverProxy).catch(() => null)
+        ]);
+        if (!audioRes.ok) throw new Error('Audio download failed');
+
+        const audioBuffer = await audioRes.arrayBuffer();
+        const writer = new ID3Writer(audioBuffer);
+
+        // Set ID3 tags: title, artist, album (djmusta), genre, comment
+        writer
+          .setFrame('TIT2', title)
+          .setFrame('TPE1', [artist])
+          .setFrame('TALB', 'DJ Musta Music — www.djmusta.com')
+          .setFrame('TCON', [genre])
+          .setFrame('TPUB', 'www.djmusta.com')
+          .setFrame('COMM', {
+            description: 'Source',
+            text: 'Downloaded from www.djmusta.com — Uganda\'s #1 Music Platform',
+            language: 'eng'
+          });
+
+        // Add watermarked cover art if available
+        if (coverRes && coverRes.ok) {
+          const coverBuffer = await coverRes.arrayBuffer();
+          // Draw watermark on canvas
+          const watermarked = await addCoverWatermark(coverBuffer, title, artist);
+          writer.setFrame('APIC', {
+            type: 3,
+            data: new Uint8Array(watermarked),
+            description: 'Cover'
+          });
+        }
+
+        writer.addTag();
+        const blob = writer.getBlob();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = downloadName;
+        a.download = cleanName;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
         showToast('✅ Downloaded: ' + title, '✔️');
+        trackEvent('download_song', { song_id: id, song_title: title, artist });
+
       } catch (e) {
-        showToast('Download failed: ' + e.message, '❌');
+        // Fallback: plain download without tags
+        console.warn('ID3 download failed, using plain download:', e.message);
+        try {
+          const res = await fetch(backendUrl);
+          if (!res.ok) throw new Error('Download failed');
+          const blob = await res.blob();
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = cleanName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+          showToast('✅ Downloaded: ' + title, '✔️');
+          trackEvent('download_song', { song_id: id, song_title: title, artist });
+        } catch (e2) {
+          showToast('Download failed: ' + e2.message, '❌');
+        }
+      }
+    }
+
+    // Adds text watermark on cover art: song title, artist, www.djmusta.com
+    async function addCoverWatermark(buffer, title, artist) {
+      try {
+        const blob = new Blob([buffer]);
+        const img = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        const size = Math.max(img.width, img.height, 500);
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Draw image
+        ctx.drawImage(img, 0, 0, size, size);
+
+        // Bottom gradient bar
+        const barH = Math.round(size * 0.22);
+        const grad = ctx.createLinearGradient(0, size - barH, 0, size);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.85)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, size - barH, size, barH);
+
+        // Song title
+        const titleSize = Math.max(18, Math.round(size * 0.048));
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${titleSize}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const maxW = size * 0.88;
+        let displayTitle = title;
+        while (ctx.measureText(displayTitle).width > maxW && displayTitle.length > 4) {
+          displayTitle = displayTitle.slice(0, -1);
+        }
+        if (displayTitle !== title) displayTitle += '…';
+        ctx.fillText(displayTitle, size / 2, size - barH * 0.42);
+
+        // Artist name
+        const artistSize = Math.max(13, Math.round(size * 0.033));
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.font = `600 ${artistSize}px Arial, sans-serif`;
+        ctx.fillText(artist, size / 2, size - barH * 0.15);
+
+        // www.djmusta.com label — top right
+        const labelSize = Math.max(11, Math.round(size * 0.028));
+        ctx.fillStyle = 'rgba(168,85,247,0.9)';
+        ctx.font = `800 ${labelSize}px Arial, sans-serif`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText('www.djmusta.com', size - 10, 10);
+
+        const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+        return await outBlob.arrayBuffer();
+      } catch (e) {
+        console.warn('Cover watermark failed:', e);
+        return buffer;
       }
     }
 
