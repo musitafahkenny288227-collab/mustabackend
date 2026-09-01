@@ -3114,7 +3114,7 @@
       const song = songs.find(item => String(item.id) === String(id)) || { title, artist: 'Unknown', genre: 'Ugandan Music' };
       const artist = song.artist || 'DJ Musta';
       const genre = song.genre || 'Ugandan Music';
-      const coverSource = song.cover_path || song.cover_image || DEFAULT_COVER;
+      const coverSource = song.cover_path || song.cover_image || '';
       const backendUrl = API + '/api/songs/' + id + '/download-file';
       const cleanName = `${title} - ${artist} [www.djmusta.com].mp3`.replace(/[\\/:*?"<>|]/g, '-');
 
@@ -3125,41 +3125,72 @@
         const ID3Writer = window.ID3Writer;
         if (!ID3Writer) throw new Error('ID3 writer not ready');
 
-        const coverUrl = imgSrc(coverSource);
-        const coverProxy = 'https://images.weserv.nl/?url=' + encodeURIComponent(coverUrl) + '&w=500&h=500&fit=cover&output=jpg&q=85';
+        // Fetch audio and cover in parallel
+        // Use images.weserv.nl to proxy cover (handles CORS + converts SVG to JPG)
+        let coverFetchUrl = null;
+        if (coverSource && !coverSource.includes('default-cover')) {
+          // Direct R2 URL — proxy through weserv to ensure CORS + JPEG output
+          const directUrl = coverSource.startsWith('http') ? coverSource : (API + coverSource);
+          coverFetchUrl = 'https://images.weserv.nl/?url=' + encodeURIComponent(directUrl) + '&w=600&h=600&fit=cover&output=jpg&q=90';
+        } else {
+          // No real cover — use a solid purple placeholder
+          coverFetchUrl = null;
+        }
 
-        const [audioRes, coverRes] = await Promise.all([
-          fetch(backendUrl),
-          fetch(coverProxy).catch(() => null)
-        ]);
-        if (!audioRes.ok) throw new Error('Audio download failed');
+        const audioPromise = fetch(backendUrl);
+        const coverPromise = coverFetchUrl
+          ? fetch(coverFetchUrl, { mode: 'cors' }).catch(() => null)
+          : Promise.resolve(null);
+
+        const [audioRes, coverRes] = await Promise.all([audioPromise, coverPromise]);
+        if (!audioRes.ok) throw new Error('Audio download failed (' + audioRes.status + ')');
 
         const audioBuffer = await audioRes.arrayBuffer();
         const writer = new ID3Writer(audioBuffer);
 
-        // Set ID3 tags: title, artist, album (djmusta), genre, comment
+        // Set ID3 tags
         writer
-          .setFrame('TIT2', `${title} | www.djmusta.com`)
+          .setFrame('TIT2', title + ' | www.djmusta.com')
           .setFrame('TPE1', [artist])
           .setFrame('TALB', 'DJ Musta Music — www.djmusta.com')
           .setFrame('TCON', [genre])
           .setFrame('TPUB', 'www.djmusta.com')
           .setFrame('COMM', {
             description: 'Source',
-            text: 'Downloaded from www.djmusta.com — Uganda\'s #1 Music Platform',
+            text: "Downloaded from www.djmusta.com — Uganda's #1 Music Platform",
             language: 'eng'
           });
 
-        // Add watermarked cover art if available
+        // Add cover art (watermarked)
+        let coverBuffer = null;
         if (coverRes && coverRes.ok) {
-          const coverBuffer = await coverRes.arrayBuffer();
-          // Draw watermark on canvas
-          const watermarked = await addCoverWatermark(coverBuffer, title, artist);
-          writer.setFrame('APIC', {
-            type: 3,
-            data: new Uint8Array(watermarked),
-            description: 'Cover'
-          });
+          try {
+            coverBuffer = await coverRes.arrayBuffer();
+          } catch(e) { console.warn('Cover read failed:', e.message); }
+        }
+
+        // If no real cover, generate a branded placeholder
+        if (!coverBuffer) {
+          coverBuffer = await generatePlaceholderCover(title, artist);
+        }
+
+        if (coverBuffer) {
+          try {
+            const watermarked = await addCoverWatermark(coverBuffer, title, artist);
+            writer.setFrame('APIC', {
+              type: 3,
+              data: new Uint8Array(watermarked),
+              description: 'Cover'
+            });
+          } catch(e) {
+            // Add cover without watermark as fallback
+            writer.setFrame('APIC', {
+              type: 3,
+              data: new Uint8Array(coverBuffer),
+              description: 'Cover'
+            });
+            console.warn('Watermark failed, using plain cover:', e.message);
+          }
         }
 
         writer.addTag();
@@ -3175,8 +3206,8 @@
         trackEvent('download_song', { song_id: id, song_title: title, artist });
 
       } catch (e) {
+        console.warn('ID3 download failed:', e.message);
         // Fallback: plain download without tags
-        console.warn('ID3 download failed, using plain download:', e.message);
         try {
           const res = await fetch(backendUrl);
           if (!res.ok) throw new Error('Download failed');
@@ -3194,6 +3225,49 @@
           showToast('Download failed: ' + e2.message, '❌');
         }
       }
+    }
+
+    // Generate a branded cover placeholder when no real cover is available
+    async function generatePlaceholderCover(title, artist) {
+      try {
+        const size = 600;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Purple gradient background
+        const grad = ctx.createLinearGradient(0, 0, size, size);
+        grad.addColorStop(0, '#1a0a2e');
+        grad.addColorStop(0.5, '#2d1b4e');
+        grad.addColorStop(1, '#0f1629');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, size, size);
+
+        // Music note emoji in center
+        ctx.font = `${Math.round(size * 0.28)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(168,85,247,0.6)';
+        ctx.fillText('🎵', size / 2, size * 0.42);
+
+        // Song title
+        ctx.font = `700 ${Math.round(size * 0.06)}px Arial, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        let t = title || 'Unknown';
+        if (ctx.measureText(t).width > size * 0.85) {
+          while (ctx.measureText(t + '…').width > size * 0.85 && t.length > 3) t = t.slice(0,-1);
+          t += '…';
+        }
+        ctx.fillText(t, size / 2, size * 0.68);
+
+        // Artist
+        ctx.font = `500 ${Math.round(size * 0.042)}px Arial, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.fillText(artist || 'Unknown Artist', size / 2, size * 0.76);
+
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+        return await blob.arrayBuffer();
+      } catch(e) { return null; }
     }
 
     // Adds text watermark on cover art: song title, artist, www.djmusta.com
