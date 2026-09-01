@@ -3202,75 +3202,119 @@
         const blob = new Blob([buffer]);
         const img = await createImageBitmap(blob);
         const canvas = document.createElement('canvas');
-        const size = Math.max(img.width, img.height, 500);
+
+        // Make canvas square, minimum 600px for quality
+        const size = Math.max(img.width, img.height, 600);
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
 
-        // Draw original image
+        // ── 1. Draw the original image ──────────────────────────────
         ctx.drawImage(img, 0, 0, size, size);
 
-        // ── DIAGONAL www.djmusta.com WATERMARK (center, semi-transparent) ──
+        // ── 2. Diagonal semi-transparent watermark (center) ─────────
         ctx.save();
         ctx.translate(size / 2, size / 2);
-        ctx.rotate(-Math.PI / 6); // -30 degrees
-        const wmSize = Math.max(22, Math.round(size * 0.055));
+        ctx.rotate(-Math.PI / 7);
+        const wmSize = Math.max(18, Math.round(size * 0.044));
         ctx.font = `800 ${wmSize}px Arial, sans-serif`;
-        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        ctx.fillStyle = 'rgba(255,255,255,0.13)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        // Repeat watermark 3 rows
-        for (let row = -1; row <= 1; row++) {
-          ctx.fillText('www.djmusta.com', 0, row * wmSize * 2.5);
+        for (let row = -2; row <= 2; row++) {
+          ctx.fillText('www.djmusta.com', 0, row * wmSize * 2.8);
         }
         ctx.restore();
 
-        // ── BOTTOM BAR: song title + artist ──
-        const barH = Math.round(size * 0.26);
-        const grad = ctx.createLinearGradient(0, size - barH, 0, size);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0.75)');
-        grad.addColorStop(1, 'rgba(0,0,0,0.92)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, size - barH, size, barH);
+        // ── 3. LOWER THIRD — professional TV-style graphic ──────────
+        const lowerH = Math.round(size * 0.30); // 30% of height
+        const lowerY = size - lowerH;
 
-        const maxW = size * 0.88;
+        // Deep gradient for lower third
+        const lowerGrad = ctx.createLinearGradient(0, lowerY, 0, size);
+        lowerGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        lowerGrad.addColorStop(0.35, 'rgba(0,0,0,0.72)');
+        lowerGrad.addColorStop(1, 'rgba(0,0,0,0.96)');
+        ctx.fillStyle = lowerGrad;
+        ctx.fillRect(0, lowerY, size, lowerH);
 
-        // Song title
-        const titleSize = Math.max(20, Math.round(size * 0.052));
+        // Purple accent bar — 4px tall strip
+        const accentY = size - Math.round(lowerH * 0.74);
+        ctx.fillStyle = '#a855f7';
+        ctx.fillRect(0, accentY, size, Math.max(4, Math.round(size * 0.007)));
+
+        // Song title — white, bold
+        const titleFontSize = Math.max(22, Math.round(size * 0.058));
+        ctx.font = `800 ${titleFontSize}px Arial Black, Arial, sans-serif`;
         ctx.fillStyle = '#ffffff';
-        ctx.font = `700 ${titleSize}px Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        let displayTitle = title;
-        while (ctx.measureText(displayTitle).width > maxW && displayTitle.length > 4) {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        const pad = Math.round(size * 0.05);
+        const maxTitleW = size - pad * 2;
+        let displayTitle = title || 'Unknown';
+        while (ctx.measureText(displayTitle).width > maxTitleW && displayTitle.length > 4) {
           displayTitle = displayTitle.slice(0, -1);
         }
-        if (displayTitle !== title) displayTitle += '…';
-        ctx.fillText(displayTitle, size / 2, size - barH * 0.44);
+        if (displayTitle.length < (title || '').length) displayTitle += '…';
+        const titleY = size - Math.round(lowerH * 0.42);
+        ctx.fillText(displayTitle, pad, titleY);
 
-        // Artist name
-        const artistSize = Math.max(15, Math.round(size * 0.036));
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        ctx.font = `600 ${artistSize}px Arial, sans-serif`;
-        ctx.fillText(artist, size / 2, size - barH * 0.18);
+        // Artist name — lighter, smaller
+        const artistFontSize = Math.max(15, Math.round(size * 0.038));
+        ctx.font = `600 ${artistFontSize}px Arial, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.78)';
+        let displayArtist = artist || 'Unknown Artist';
+        while (ctx.measureText(displayArtist).width > maxTitleW && displayArtist.length > 4) {
+          displayArtist = displayArtist.slice(0, -1);
+        }
+        if (displayArtist.length < (artist || '').length) displayArtist += '…';
+        const artistY = size - Math.round(lowerH * 0.18);
+        ctx.fillText(displayArtist, pad, artistY);
 
-        // ── TOP BAR: www.djmusta.com prominent label ──
-        const topBarH = Math.round(size * 0.1);
+        // ── 4. www.djmusta.com — top-right watermark ────────────────
+        const topBarH = Math.round(size * 0.11);
         const topGrad = ctx.createLinearGradient(0, 0, 0, topBarH);
-        topGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
+        topGrad.addColorStop(0, 'rgba(0,0,0,0.82)');
         topGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = topGrad;
         ctx.fillRect(0, 0, size, topBarH);
 
-        const siteSize = Math.max(16, Math.round(size * 0.042));
-        ctx.fillStyle = '#a855f7';
-        ctx.font = `800 ${siteSize}px Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText('www.djmusta.com', size / 2, Math.round(size * 0.018));
+        // Purple pill background for URL
+        const urlFontSize = Math.max(14, Math.round(size * 0.036));
+        ctx.font = `800 ${urlFontSize}px Arial, sans-serif`;
+        const urlText = 'www.djmusta.com';
+        const urlW = ctx.measureText(urlText).width;
+        const pillPadH = Math.round(size * 0.014);
+        const pillPadV = Math.round(size * 0.009);
+        const pillX = size - urlW - pad - pillPadH * 2;
+        const pillY = Math.round(size * 0.018);
+        const pillW = urlW + pillPadH * 2;
+        const pillH = urlFontSize + pillPadV * 2;
+        const r = pillH / 2;
 
-        const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        // Draw pill
+        ctx.fillStyle = 'rgba(168,85,247,0.88)';
+        ctx.beginPath();
+        ctx.moveTo(pillX + r, pillY);
+        ctx.lineTo(pillX + pillW - r, pillY);
+        ctx.arcTo(pillX + pillW, pillY, pillX + pillW, pillY + r, r);
+        ctx.lineTo(pillX + pillW, pillY + pillH - r);
+        ctx.arcTo(pillX + pillW, pillY + pillH, pillX + pillW - r, pillY + pillH, r);
+        ctx.lineTo(pillX + r, pillY + pillH);
+        ctx.arcTo(pillX, pillY + pillH, pillX, pillY + pillH - r, r);
+        ctx.lineTo(pillX, pillY + r);
+        ctx.arcTo(pillX, pillY, pillX + r, pillY, r);
+        ctx.closePath();
+        ctx.fill();
+
+        // URL text inside pill
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(urlText, pillX + pillW / 2, pillY + pillH / 2);
+
+        // ── 5. Output ────────────────────────────────────────────────
+        const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
         return await outBlob.arrayBuffer();
       } catch (e) {
         console.warn('Cover watermark failed:', e);
