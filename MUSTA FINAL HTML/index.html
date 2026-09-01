@@ -1337,6 +1337,42 @@
   <!-- ===== MAIN CONTENT ===== -->
   <div id="musicSections" style="max-width:1240px;margin:20px auto;padding:0 14px">
 
+    <!-- ===== SONG OF THE DAY ===== -->
+    <div id="songOfDayWrap" style="margin-bottom:28px;display:none">
+      <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(168,85,247,.12));border:1px solid rgba(245,158,11,.3);border-radius:16px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;cursor:pointer" onclick="playSong(window._songOfDayId)" id="songOfDayCard">
+        <div style="position:relative;flex-shrink:0">
+          <img id="songOfDayCover" src="" style="width:80px;height:80px;border-radius:12px;object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,.4)" onerror="this.src='${DEFAULT_COVER}'"/>
+          <div style="position:absolute;top:-8px;left:-8px;background:linear-gradient(135deg,#f59e0b,#f97316);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(245,158,11,.5)">☀️</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;font-weight:800;letter-spacing:.12em;color:#f59e0b;text-transform:uppercase;margin-bottom:4px">🌟 Song of the Day</div>
+          <div id="songOfDayTitle" style="font-size:18px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          <div id="songOfDayArtist" style="font-size:13px;color:#94a3b8;margin-top:2px"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button onclick="event.stopPropagation();playSong(window._songOfDayId)" style="background:linear-gradient(135deg,#f59e0b,#f97316);color:white;border:none;padding:10px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;min-height:40px">▶ Play Now</button>
+          <button onclick="event.stopPropagation();downloadSong(window._songOfDayId,document.getElementById('songOfDayTitle').textContent,'')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:white;padding:10px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;min-height:40px">⬇</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== RECENTLY PLAYED (Continue Listening) ===== -->
+    <div id="recentlyPlayedWrap" style="margin-bottom:28px;display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px">🕐 Continue Listening</div>
+        <button onclick="localStorage.removeItem('djm_history');document.getElementById('recentlyPlayedWrap').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:4px 8px">Clear</button>
+      </div>
+      <div id="recentlyPlayedGrid" class="music-grid"></div>
+    </div>
+
+    <!-- ===== SPONSORED SONGS ===== -->
+    <div id="sponsoredWrap" style="margin-bottom:28px;display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px">⚡ Sponsored <span style="font-size:11px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;padding:2px 10px;border-radius:50px;font-weight:700">PROMOTED</span></div>
+      </div>
+      <div id="sponsoredGrid" class="music-grid"></div>
+    </div>
+
     <!-- ===== VERIFIED ARTISTS ===== -->
     <div id="verifiedArtistsWrap" style="margin-bottom:32px;display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -1405,6 +1441,15 @@
     <div id="songsGrid" class="music-grid"></div>
     <div id="loadMoreWrap" style="display:none;text-align:center;margin-top:24px">
       <button id="loadMoreBtn" onclick="loadMore()" style="background:var(--pink);color:white;border:none;padding:12px 32px;border-radius:50px;font-weight:700;font-size:14px;cursor:pointer;min-height:44px">Load More Songs ↓</button>
+    </div>
+
+    <!-- ===== RELATED SONGS (shows after playing) ===== -->
+    <div id="relatedSongsWrap" style="display:none;margin-top:32px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px">🎵 You Might Also Like</div>
+        <button onclick="document.getElementById('relatedSongsWrap').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">Hide</button>
+      </div>
+      <div id="relatedSongsGrid" class="music-grid"></div>
     </div>
   </div>
 
@@ -1979,8 +2024,15 @@
   <footer style="background:var(--nav);color:#8892b0;padding:40px 20px 20px;margin-top:40px;border-top:1px solid #2a2a4a">
     <div style="max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px">
       <div>
-        <div style="font-size:22px;font-weight:900;color:white;margin-bottom:10px;line-height:1">🎵</div>
-        <p style="font-size:13px;line-height:1.6">Uganda's #1 music platform. Stream and download the hottest Ugandan tracks for free.</p>
+        <div style="font-size:22px;font-weight:900;color:white;margin-bottom:10px;line-height:1">🎵 DJ Musta</div>
+        <p style="font-size:13px;line-height:1.6;margin-bottom:14px">Uganda's #1 music platform. Stream and download the hottest Ugandan tracks for free.</p>
+        <!-- Social media links -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a href="https://www.youtube.com/@djmusta-official" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,0,0,.15);border:1px solid rgba(255,0,0,.3);color:#ff4444;font-size:16px;text-decoration:none" title="YouTube">▶</a>
+          <a href="https://www.tiktok.com/@djmusta00" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:white;font-size:13px;font-weight:800;text-decoration:none" title="TikTok">TT</a>
+          <a href="https://wa.me/256783133389" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(37,211,102,.15);border:1px solid rgba(37,211,102,.3);color:#25d366;font-size:16px;text-decoration:none" title="WhatsApp">💬</a>
+          <a href="https://mail.google.com/mail/?view=cm&to=musitafahkenny288227@gmail.com" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#a855f7;font-size:16px;text-decoration:none" title="Email">📧</a>
+        </div>
       </div>
       <div>
         <div style="font-weight:700;color:white;margin-bottom:10px;font-size:14px">MUSIC</div>
@@ -2217,15 +2269,46 @@
     }
 
     function downloadAPK() {
-      const url = 'https://pub-1004f9c2790e44689198e9849c00fb9b.r2.dev/app/djmusta-music.apk';
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'DJMusta.apk';
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast('APK download started', '📱');
+      // Try PWA install first, fall back to showing install instructions
+      if (window.pwaInstall) {
+        window.pwaInstall();
+        return;
+      }
+      const isAndroid = /android/i.test(navigator.userAgent);
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (isAndroid) {
+        showInfoModal('📱 Install DJ Musta App', `
+          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
+            <p style="margin-bottom:12px">Install DJ Musta as an app on your Android phone:</p>
+            <ol style="margin-left:20px;line-height:2">
+              <li>Open <strong style="color:var(--text)">djmusta.com</strong> in Chrome</li>
+              <li>Tap the <strong style="color:var(--text)">⋮ menu</strong> (top right)</li>
+              <li>Tap <strong style="color:var(--text)">"Add to Home Screen"</strong></li>
+              <li>Tap <strong style="color:var(--text)">Add</strong></li>
+            </ol>
+            <p style="margin-top:12px">The app will appear on your home screen like any other app! 🎵</p>
+          </div>`);
+      } else if (isIOS) {
+        showInfoModal('📱 Install DJ Musta App', `
+          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
+            <p style="margin-bottom:12px">Install DJ Musta as an app on your iPhone/iPad:</p>
+            <ol style="margin-left:20px;line-height:2">
+              <li>Open <strong style="color:var(--text)">djmusta.com</strong> in Safari</li>
+              <li>Tap the <strong style="color:var(--text)">Share button</strong> (box with arrow)</li>
+              <li>Tap <strong style="color:var(--text)">"Add to Home Screen"</strong></li>
+              <li>Tap <strong style="color:var(--text)">Add</strong></li>
+            </ol>
+            <p style="margin-top:12px">The app will appear on your home screen! 🎵</p>
+          </div>`);
+      } else {
+        showInfoModal('📱 Install DJ Musta App', `
+          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
+            <p style="margin-bottom:12px">DJ Musta is a Progressive Web App (PWA). Install it on any device:</p>
+            <p><strong style="color:var(--text)">On Chrome (PC/Android):</strong> Click the install icon in the address bar or use ⋮ menu → "Install app"</p>
+            <p style="margin-top:8px"><strong style="color:var(--text)">On Safari (iPhone):</strong> Share button → "Add to Home Screen"</p>
+            <p style="margin-top:12px;color:var(--pink);font-weight:700">Open djmusta.com on your phone for the best experience! 🎵</p>
+          </div>`);
+      }
     }
 
     function showForgotPassword() {
@@ -2732,6 +2815,7 @@
       onSearch._t = setTimeout(() => {
         genreFilter = '';
         category = 'all';
+        showSearchFilters(searchQuery);
         showSection('songsSection');
         loadSongs(true);
         setTimeout(() => songsGrid?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
@@ -2835,6 +2919,9 @@
       const slugify = v => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
       const songSlug = `/song/${slugify(s.title) || 'song-' + id}/${slugify(s.artist)}`;
       window.history.replaceState({ songId: id }, s.title + ' | DJ Musta', songSlug);
+
+      // Load related songs
+      setTimeout(() => loadRelatedSongs(id, s.genre, s.artist), 1000);
 
       // Update play count
       api('/songs/' + id + '/play', { method: 'POST' }).catch(() => {});
@@ -3444,6 +3531,15 @@
 
     async function loadSpecialGrids() {
       try {
+        // Song of the Day
+        loadSongOfDay();
+
+        // Recently played row
+        loadRecentlyPlayedRow();
+
+        // Sponsored songs
+        loadSponsoredSongs();
+
         // Trending
         const td = await api('/songs?category=trending&limit=12');
         renderMusicGrid('trending-today-grid', (td.songs || []).filter(s => (s.genre || '').toLowerCase() !== 'kadongo kamu'));
@@ -3565,6 +3661,8 @@
       fd.append('duration', document.getElementById('upDuration').value || '3:00');
       const year = document.getElementById('upReleaseYear').value;
       if (year) fd.append('release_year', year);
+      const lyrics = document.getElementById('upLyrics')?.value?.trim();
+      if (lyrics) fd.append('lyrics', lyrics);
       fd.append('song', audioFile);
       const cover = document.getElementById('coverFile').files[0];
       if (cover) fd.append('cover', cover);
@@ -3604,6 +3702,137 @@
       }
       btn.disabled = false;
       btn.textContent = 'Upload Song';
+    }
+
+    // ============================================================
+    // NEW FEATURES: Song of Day, Recently Played, Sponsored,
+    //               Related Songs, Search Filters
+    // ============================================================
+
+    // FEATURE 7 — Song of the Day
+    async function loadSongOfDay() {
+      try {
+        const d = await api('/songs?limit=100&category=all');
+        const allSongs = d.songs || [];
+        // Find song marked as song of day, else use most played today
+        const sotd = allSongs.find(s => s.is_song_of_day) ||
+                     allSongs.sort((a, b) => (b.play_count || 0) - (a.play_count || 0))[0];
+        if (!sotd) return;
+        window._songOfDayId = sotd.id;
+        document.getElementById('songOfDayCover').src = imgSrc(sotd.cover_path || sotd.cover_image);
+        document.getElementById('songOfDayTitle').textContent = sotd.title;
+        document.getElementById('songOfDayArtist').textContent = 'by ' + formatArtistNames(sotd.artist);
+        document.getElementById('songOfDayWrap').style.display = 'block';
+      } catch (e) { /* silent */ }
+    }
+
+    // FEATURE 10 — Recently Played row
+    function loadRecentlyPlayedRow() {
+      const history = JSON.parse(localStorage.getItem('djm_history') || '[]');
+      if (!history.length) return;
+      const wrap = document.getElementById('recentlyPlayedWrap');
+      const grid = document.getElementById('recentlyPlayedGrid');
+      if (!wrap || !grid) return;
+      grid.className = 'music-grid';
+      grid.innerHTML = history.slice(0, 10).map(s => `
+        <div class="song-card" onclick="playSong(${s.id})">
+          <div class="image-wrapper">
+            <img src="${imgSrc(s.cover)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
+          </div>
+          <div class="card-details">
+            <div class="song-title">${esc(s.title || 'Unknown')}</div>
+            <div class="artist-name">${esc(s.artist || '')}</div>
+          </div>
+        </div>`).join('');
+      wrap.style.display = 'block';
+    }
+
+    // FEATURE 8 — Sponsored songs
+    async function loadSponsoredSongs() {
+      try {
+        const d = await api('/songs?limit=100&category=all');
+        const sponsored = (d.songs || []).filter(s => s.sponsored_until && new Date(s.sponsored_until) > new Date());
+        if (!sponsored.length) return;
+        renderMusicGrid('sponsoredGrid', sponsored);
+        document.getElementById('sponsoredWrap').style.display = 'block';
+      } catch (e) { /* silent */ }
+    }
+
+    // FEATURE 11 — Related songs (shown after a song plays)
+    async function loadRelatedSongs(songId, genre, artist) {
+      try {
+        // Search by same genre, exclude current song
+        const [byGenre, byArtist] = await Promise.all([
+          api('/songs?genre=' + encodeURIComponent(genre || '') + '&limit=12').catch(() => ({ songs: [] })),
+          api('/songs?search=' + encodeURIComponent(artist || '') + '&limit=8').catch(() => ({ songs: [] }))
+        ]);
+        const all = [...(byGenre.songs || []), ...(byArtist.songs || [])];
+        const seen = new Set();
+        const related = all.filter(s => {
+          if (s.id === songId || seen.has(s.id)) return false;
+          seen.add(s.id);
+          return true;
+        }).slice(0, 10);
+        if (!related.length) return;
+        renderMusicGrid('relatedSongsGrid', related);
+        document.getElementById('relatedSongsWrap').style.display = 'block';
+      } catch (e) { /* silent */ }
+    }
+
+    // FEATURE 4 — Search filter bar (shows when search is active)
+    function showSearchFilters(query) {
+      let bar = document.getElementById('searchFilterBar');
+      if (!query) {
+        if (bar) bar.style.display = 'none';
+        return;
+      }
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'searchFilterBar';
+        bar.style.cssText = 'max-width:1240px;margin:0 auto;padding:0 14px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+        bar.innerHTML = `
+          <span style="font-size:12px;color:var(--muted);font-weight:700;white-space:nowrap">Filter:</span>
+          <button class="sfbtn active" onclick="filterSearchBy('all',this)">All</button>
+          <button class="sfbtn" onclick="filterSearchBy('Afrobeat',this)">Afrobeat</button>
+          <button class="sfbtn" onclick="filterSearchBy('Kadongo Kamu',this)">Kadongo Kamu</button>
+          <button class="sfbtn" onclick="filterSearchBy('Gospel',this)">Gospel</button>
+          <button class="sfbtn" onclick="filterSearchBy('Dancehall',this)">Dancehall</button>
+          <button class="sfbtn" onclick="filterSearchBy('R&B',this)">R&amp;B</button>
+          <button class="sfbtn" onclick="filterSearchBy('Hip Hop',this)">Hip Hop</button>
+          <style>
+            .sfbtn{padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;background:var(--card);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+            .sfbtn.active{background:var(--pink);color:white;border-color:var(--pink)}
+            .sfbtn:hover:not(.active){border-color:var(--pink);color:var(--pink)}
+          </style>`;
+        const sections = document.getElementById('musicSections');
+        if (sections) sections.parentNode.insertBefore(bar, sections);
+      }
+      bar.style.display = 'flex';
+    }
+
+    function filterSearchBy(genre, btn) {
+      document.querySelectorAll('.sfbtn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      if (genre === 'all') {
+        genreFilter = '';
+      } else {
+        genreFilter = genre;
+      }
+      loadSongs(true);
+    }
+
+    // FEATURE 5 — Auto-fetch artist photo from their songs
+    function getArtistPhoto(artistName, songsList) {
+      // Look for a non-default cover in songs by this artist
+      const artistSongs = (songsList || songs || []).filter(s =>
+        (s.artist || '').toLowerCase().includes(artistName.toLowerCase())
+      );
+      const withCover = artistSongs.find(s =>
+        (s.cover_path || s.cover_image) &&
+        !(s.cover_path || s.cover_image || '').includes('default-cover')
+      );
+      return withCover ? imgSrc(withCover.cover_path || withCover.cover_image) : null;
     }
 
     function switchUploadMode(mode) {
@@ -4001,7 +4230,7 @@
         } else if (tab === 'revenue') {
           const stats = await api('/admin/stats');
           c.innerHTML = `
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px">
               <div style="background:var(--bg);padding:16px;border-radius:10px;text-align:center">
                 <div style="font-size:28px;font-weight:900;color:#f59e0b">${stats.premium || 0}</div>
                 <div style="font-size:12px;color:var(--muted)">Premium Users</div>
@@ -4010,6 +4239,15 @@
                 <div style="font-size:28px;font-weight:900;color:#22c55e">UGX ${((stats.revenue || 0)).toLocaleString()}</div>
                 <div style="font-size:12px;color:var(--muted)">Revenue</div>
               </div>
+            </div>
+            <div style="background:var(--bg);border-radius:12px;padding:20px;border:1px solid var(--border)">
+              <div style="font-size:15px;font-weight:700;margin-bottom:6px">📧 Email Notifications (Brevo)</div>
+              <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Set your Brevo API key to enable email alerts when songs are approved and when artists get new followers.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input id="brevoKeyInput" type="password" placeholder="Paste your Brevo API key here..." style="flex:1;min-width:200px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:13px;font-family:inherit"/>
+                <button onclick="saveBrevoKey()" style="background:var(--pink);color:white;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;min-height:44px">Save Key</button>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:8px">Get your free API key at <a href="https://app.brevo.com" target="_blank" style="color:var(--pink)">app.brevo.com</a> → Settings → API Keys</div>
             </div>`;
         }
       } catch (e) {
@@ -4028,8 +4266,25 @@
       }
     }
 
-    async function adminDelete(id) {
-      if (!confirm('Delete this song?')) return;
+    // Feature 9 — Save Brevo API key via admin backend
+    async function saveBrevoKey() {
+      const key = document.getElementById('brevoKeyInput')?.value?.trim();
+      if (!key) return showToast('Paste your Brevo API key first', '⚠️');
+      try {
+        await api('/admin/settings', {
+          method: 'PATCH',
+          body: JSON.stringify({ brevo_api_key: key })
+        });
+        showToast('✅ Brevo API key saved! Email notifications are now active.', '📧');
+        document.getElementById('brevoKeyInput').value = '';
+      } catch (e) {
+        // Backend may not have this endpoint yet — save locally and show instructions
+        localStorage.setItem('djm_brevo_key_pending', key);
+        showToast('Key saved locally. Set BREVO_API_KEY on Render to activate emails.', 'ℹ️');
+      }
+    }
+
+    async function adminDelete(id) {      if (!confirm('Delete this song?')) return;
       try {
         await api('/songs/' + id, { method: 'DELETE' });
         showToast('Song deleted', '🗑️');
