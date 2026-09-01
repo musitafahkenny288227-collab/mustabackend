@@ -1560,6 +1560,70 @@
       min-height: 36px;
     }
     .profile-tab.active { background: var(--pink); color: white; }
+
+    /* ── ADMIN SIDEBAR TABS ────────────────────────────────────── */
+    .admin-tab {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+      padding: 9px 11px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      position: relative;
+    }
+    .admin-tab:hover {
+      background: rgba(168,85,247,.1);
+      color: var(--text);
+    }
+    .admin-tab.active {
+      background: linear-gradient(135deg, rgba(168,85,247,.2), rgba(99,102,241,.15));
+      color: #c084fc;
+      font-weight: 700;
+      border: 1px solid rgba(168,85,247,.25);
+    }
+    .at-icon {
+      font-size: 15px;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .admin-tab span:nth-child(2) {
+      flex: 1;
+    }
+    .admin-count {
+      display: inline-grid;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 5px;
+      place-items: center;
+      border-radius: 99px;
+      background: rgba(168,85,247,.2);
+      color: #c084fc;
+      font-size: 10px;
+      font-weight: 800;
+      margin-left: auto;
+    }
+    .admin-tab.active .admin-count {
+      background: rgba(168,85,247,.35);
+    }
+    @media (max-width: 640px) {
+      .admin-layout { grid-template-columns: 1fr !important; }
+      .admin-tabs { flex-direction: row !important; overflow-x: auto; padding-right: 0 !important; border-right: none !important; border-bottom: 1px solid var(--border); padding-bottom: 8px; scrollbar-width: none; }
+      .admin-tabs::-webkit-scrollbar { display: none; }
+      .admin-tab { flex-direction: column; gap: 3px; padding: 7px 10px; font-size: 10px; min-width: 64px; text-align: center; border-radius: 8px; }
+      .admin-tab span:nth-child(2) { flex: none; }
+      .at-icon { font-size: 18px; }
+      .admin-count { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; font-size: 9px; }
+    }
     @media (max-width: 767px) {
       .upload-tab { flex: 1; padding: 9px 8px; font-size: 12px; }
       #uploadSection>div:first-child { gap: 6px !important; margin-bottom: 14px !important; }
@@ -1588,15 +1652,36 @@
       <button class="admin-primary-action" onclick="showSendPushModal()" style="background:linear-gradient(135deg,#a855f7,#6366f1);color:white;border:none;padding:9px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;min-height:40px;box-shadow:0 7px 16px rgba(99,102,241,.28)">Notify subscribers</button>
     </div>
     <div class="admin-workspace" style="background:var(--card);border-radius:16px;padding:24px;box-shadow:0 18px 45px rgba(0,0,0,.16);border:1px solid var(--border)">
-      <div class="admin-layout" style="display:grid;grid-template-columns:178px minmax(0,1fr);gap:26px">
-        <nav class="admin-tabs" style="display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:0 18px 0 0;border-right:1px solid var(--border)">
-          <button class="admin-tab active" data-admin-tab="overview" onclick="loadAdminTab('overview',this)" style="display:flex;align-items:center;min-height:38px;padding:9px 12px;border:1px solid transparent;border-radius:8px;text-align:left;color:var(--muted);background:transparent;font-size:12px;font-weight:800;transition:all .2s">Overview</button>
-          <button class="admin-tab" data-admin-tab="pending" onclick="loadAdminTab('pending',this)">Pending <span class="admin-count" id="adminPendingCount" style="display:inline-grid;min-width:19px;height:19px;margin-left:auto;padding:0 5px;place-items:center;border-radius:99px;color:var(--muted);background:rgba(148,163,184,.14);font-size:10px;font-weight:850">0</span></button>
-          <button class="admin-tab" data-admin-tab="approved" onclick="loadAdminTab('approved',this)">Approved <span class="admin-count" id="adminApprovedCount" style="display:inline-grid;min-width:19px;height:19px;margin-left:auto;padding:0 5px;place-items:center;border-radius:99px;color:var(--muted);background:rgba(148,163,184,.14);font-size:10px;font-weight:850">0</span></button>
-          <button class="admin-tab" data-admin-tab="featured" onclick="loadAdminTab('featured',this)">Featured albums</button>
-          <button class="admin-tab" data-admin-tab="users" onclick="loadAdminTab('users',this)">Users</button>
-          <button class="admin-tab" data-admin-tab="verifications" onclick="loadAdminTab('verifications',this)">Verifications</button>
-          <button class="admin-tab" data-admin-tab="revenue" onclick="loadAdminTab('revenue',this)">Revenue</button>
+      <div class="admin-layout" style="display:grid;grid-template-columns:190px minmax(0,1fr);gap:24px">
+        <nav class="admin-tabs" style="display:flex;flex-direction:column;gap:3px;padding-right:16px;border-right:1px solid var(--border)">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.14em;color:#64748b;text-transform:uppercase;padding:4px 10px 8px">Navigation</div>
+          <button class="admin-tab active" data-admin-tab="overview" onclick="loadAdminTab('overview',this)">
+            <span class="at-icon">📊</span><span>Overview</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="pending" onclick="loadAdminTab('pending',this)">
+            <span class="at-icon">⏳</span><span>Pending</span>
+            <span class="admin-count" id="adminPendingCount">0</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="approved" onclick="loadAdminTab('approved',this)">
+            <span class="at-icon">✅</span><span>Approved</span>
+            <span class="admin-count" id="adminApprovedCount">0</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="featured" onclick="loadAdminTab('featured',this)">
+            <span class="at-icon">⭐</span><span>Featured</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="users" onclick="loadAdminTab('users',this)">
+            <span class="at-icon">👥</span><span>Users</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="verifications" onclick="loadAdminTab('verifications',this)">
+            <span class="at-icon">🎤</span><span>Verifications</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="copyright" onclick="loadAdminTab('copyright',this)">
+            <span class="at-icon">⚑</span><span>Copyright</span>
+            <span class="admin-count" id="adminCopyrightCount">0</span>
+          </button>
+          <button class="admin-tab" data-admin-tab="revenue" onclick="loadAdminTab('revenue',this)">
+            <span class="at-icon">💰</span><span>Revenue</span>
+          </button>
         </nav>
         <main class="admin-main">
           <div class="admin-context" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 2px 16px">
