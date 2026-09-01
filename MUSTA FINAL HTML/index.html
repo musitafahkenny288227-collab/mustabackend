@@ -356,10 +356,48 @@
     .artist-name {
       font-size: 11px;
       color: var(--muted);
-      margin: 0;
+      margin: 0 0 6px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    /* ── CARD ACTION ROW (play, download, share) ─────────────── */
+    .card-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 4px;
+    }
+    .ca-btn {
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 5px 8px;
+      transition: opacity .15s, transform .15s;
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ca-btn:hover { opacity: .85; transform: translateY(-1px); }
+    .ca-play {
+      background: var(--pink);
+      color: white;
+      flex: 1;
+    }
+    .ca-dl {
+      background: rgba(16,185,129,.15);
+      color: #34d399;
+      border: 1px solid rgba(16,185,129,.3) !important;
+    }
+    .ca-share {
+      background: rgba(168,85,247,.12);
+      color: #c084fc;
+      border: 1px solid rgba(168,85,247,.25) !important;
+      font-size: 13px;
     }
 
     .sc-eq {
@@ -2449,6 +2487,11 @@
               <div class="card-details">
                 <div class="song-title">${esc(s.title)}</div>
                 <div class="artist-name">${esc(formatArtistNames(s.artist))}${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</div>
+                <div class="card-actions-row">
+                  <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play">▶</button>
+                  <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
+                  <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share song link">🔗</button>
+                </div>
               </div>
             </div>`;
         }).join('');
@@ -2467,6 +2510,7 @@
               <button class="like-btn${s.liked ? ' liked' : ''}" onclick="toggleLike(${s.id},this)" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted)">♥</button>
               <button onclick="playSong(${s.id})" style="width:30px;height:30px;border-radius:50%;background:var(--pink);color:white;border:none;cursor:pointer;font-size:13px">▶</button>
               <button onclick="downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" style="background:var(--pink);border:none;border-radius:50px;color:white;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">⬇</button>
+              <button onclick="openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:50px;color:#c084fc;padding:6px 10px;font-size:13px;cursor:pointer" title="Share song link">🔗</button>
             </div>
           </div>`).join('');
       }
@@ -3152,11 +3196,17 @@
           <div class="image-wrapper">
             <img src="${imgSrc(s.cover_path || s.cover_image)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             ${s.genre ? `<span class="sc-genre">${esc(s.genre)}</span>` : ''}
+            <button class="sc-like${s.liked ? ' liked' : ''}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like">♥</button>
             <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
           </div>
           <div class="card-details">
             <div class="song-title">${esc(s.title)}</div>
             <div class="artist-name">${esc(s.artist)}</div>
+            <div class="card-actions-row">
+              <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
+              <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
+              <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share">🔗</button>
+            </div>
           </div>
         </div>`).join('');
     }
