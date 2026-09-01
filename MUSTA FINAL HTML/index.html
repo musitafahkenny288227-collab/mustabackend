@@ -2270,46 +2270,33 @@
     }
 
     function downloadAPK() {
-      // Try PWA install first, fall back to showing install instructions
-      if (window.pwaInstall) {
-        window.pwaInstall();
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (isIOS) {
+        // iOS can't install APK — show PWA install guide instead
+        showInfoModal('📱 Install DJ Musta App', `
+          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
+            <p style="margin-bottom:12px;color:var(--text);font-weight:700">iPhone/iPad users:</p>
+            <p style="margin-bottom:12px">iOS doesn't support APK files. Install DJ Musta as a web app:</p>
+            <ol style="margin-left:20px;line-height:2;color:var(--text)">
+              <li>Open <strong>djmusta.com</strong> in Safari</li>
+              <li>Tap the <strong>Share button</strong> (box with arrow)</li>
+              <li>Tap <strong>"Add to Home Screen"</strong></li>
+              <li>Tap <strong>Add</strong></li>
+            </ol>
+            <p style="margin-top:12px;color:var(--pink);font-weight:700">The app icon will appear on your home screen! 🎵</p>
+          </div>`);
         return;
       }
-      const isAndroid = /android/i.test(navigator.userAgent);
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      if (isAndroid) {
-        showInfoModal('📱 Install DJ Musta App', `
-          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
-            <p style="margin-bottom:12px">Install DJ Musta as an app on your Android phone:</p>
-            <ol style="margin-left:20px;line-height:2">
-              <li>Open <strong style="color:var(--text)">djmusta.com</strong> in Chrome</li>
-              <li>Tap the <strong style="color:var(--text)">⋮ menu</strong> (top right)</li>
-              <li>Tap <strong style="color:var(--text)">"Add to Home Screen"</strong></li>
-              <li>Tap <strong style="color:var(--text)">Add</strong></li>
-            </ol>
-            <p style="margin-top:12px">The app will appear on your home screen like any other app! 🎵</p>
-          </div>`);
-      } else if (isIOS) {
-        showInfoModal('📱 Install DJ Musta App', `
-          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
-            <p style="margin-bottom:12px">Install DJ Musta as an app on your iPhone/iPad:</p>
-            <ol style="margin-left:20px;line-height:2">
-              <li>Open <strong style="color:var(--text)">djmusta.com</strong> in Safari</li>
-              <li>Tap the <strong style="color:var(--text)">Share button</strong> (box with arrow)</li>
-              <li>Tap <strong style="color:var(--text)">"Add to Home Screen"</strong></li>
-              <li>Tap <strong style="color:var(--text)">Add</strong></li>
-            </ol>
-            <p style="margin-top:12px">The app will appear on your home screen! 🎵</p>
-          </div>`);
-      } else {
-        showInfoModal('📱 Install DJ Musta App', `
-          <div style="line-height:1.8;font-size:14px;color:var(--muted)">
-            <p style="margin-bottom:12px">DJ Musta is a Progressive Web App (PWA). Install it on any device:</p>
-            <p><strong style="color:var(--text)">On Chrome (PC/Android):</strong> Click the install icon in the address bar or use ⋮ menu → "Install app"</p>
-            <p style="margin-top:8px"><strong style="color:var(--text)">On Safari (iPhone):</strong> Share button → "Add to Home Screen"</p>
-            <p style="margin-top:12px;color:var(--pink);font-weight:700">Open djmusta.com on your phone for the best experience! 🎵</p>
-          </div>`);
-      }
+      // Android & others — direct APK download
+      const url = 'https://pub-1004f9c2790e44689198e9849c00fb9b.r2.dev/app/djmusta-music.apk';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'DJMusta.apk';
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast('📱 APK download started!', '✅');
     }
 
     function showForgotPassword() {
