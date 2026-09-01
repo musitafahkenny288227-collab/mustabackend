@@ -38,15 +38,138 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "DJ Musta Music",
-    "url": "https://djmusta.com",
-    "description": "Uganda's #1 free music streaming and download platform",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": "https://djmusta.com?search={search_term_string}",
-      "query-input": "required name=search_term_string"
-    }
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://djmusta.com/#website",
+        "name": "DJ Musta Music",
+        "url": "https://djmusta.com",
+        "description": "Uganda's #1 free music streaming and download platform. Stream and download Kadongo Kamu, Gospel, Afrobeat, Dancehall and more.",
+        "inLanguage": "en",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://djmusta.com?search={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://djmusta.com/#organization",
+        "name": "DJ Musta Music",
+        "url": "https://djmusta.com",
+        "logo": {
+          "@type": "ImageObject",
+          "@id": "https://djmusta.com/#logo",
+          "url": "https://djmusta.com/icons/icon-512.png",
+          "width": 512,
+          "height": 512,
+          "caption": "DJ Musta Music"
+        },
+        "image": { "@id": "https://djmusta.com/#logo" },
+        "description": "Uganda's #1 music platform for streaming and downloading the hottest Ugandan songs free.",
+        "address": {
+          "@type": "PostalAddress",
+          "addressCountry": "UG",
+          "addressRegion": "Central Uganda"
+        },
+        "contactPoint": [
+          {
+            "@type": "ContactPoint",
+            "telephone": "+256783133389",
+            "contactType": "customer service",
+            "availableLanguage": ["English", "Luganda"]
+          }
+        ],
+        "sameAs": [
+          "https://www.youtube.com/@djmusta-official",
+          "https://www.tiktok.com/@djmusta00",
+          "https://wa.me/256783133389"
+        ]
+      },
+      {
+        "@type": "LocalBusiness",
+        "@id": "https://djmusta.com/#localbusiness",
+        "name": "DJ Musta Music",
+        "url": "https://djmusta.com",
+        "logo": "https://djmusta.com/icons/icon-512.png",
+        "image": "https://djmusta.com/banner.jpg",
+        "description": "Uganda's #1 free music streaming and download platform. Stream Kadongo Kamu, Gospel, Afrobeat, Dancehall, and more Ugandan music.",
+        "telephone": "+256783133389",
+        "email": "musitafahkenny288227@gmail.com",
+        "address": {
+          "@type": "PostalAddress",
+          "addressCountry": "UG",
+          "addressLocality": "Kampala",
+          "addressRegion": "Central Uganda"
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": "0.3476",
+          "longitude": "32.5825"
+        },
+        "openingHoursSpecification": {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+          "opens": "00:00",
+          "closes": "23:59"
+        },
+        "priceRange": "Free",
+        "servesCuisine": "Music Streaming"
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://djmusta.com/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://djmusta.com"
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://djmusta.com/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is DJ Musta Music free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes! DJ Musta Music is completely free. You can stream and download all Ugandan music at no cost."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What genres of music are on DJ Musta?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "DJ Musta features Kadongo Kamu, Gospel, Afrobeat, Dancehall, R&B, Hip Hop, Reggae, Nonstops, and all genres of Ugandan music."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I upload my music to DJ Musta?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes! Artists can upload their music directly. Contact us on WhatsApp +256 783 133 389 or use the Upload Song feature after signing in."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I download songs from DJ Musta?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Click the download button (⬇) on any song card. The MP3 will download automatically with the song title, artist name, and DJ Musta branding embedded."
+            }
+          }
+        ]
+      }
+    ]
   }
   </script>
 
