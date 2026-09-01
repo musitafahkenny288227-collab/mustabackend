@@ -4400,8 +4400,11 @@
     async function adminReviewVerification(id, status) {
       try {
         await api('/verification/review/' + id, {
-          method: 'PATCH',
-          body: JSON.stringify({ status, admin_notes: '' })
+          method: 'POST',
+          body: JSON.stringify({
+            action: status === 'approved' ? 'approve' : 'reject',
+            admin_notes: ''
+          })
         });
         showToast(status === 'approved' ? '✅ Artist verified!' : 'Request rejected', status === 'approved' ? '✅' : 'ℹ️');
         loadAdminTab('verifications', document.querySelector('.admin-tab[data-admin-tab="verifications"]'));
