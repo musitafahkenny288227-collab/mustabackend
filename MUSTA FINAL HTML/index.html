@@ -2064,6 +2064,7 @@
       <div style="margin-top:10px;display:flex;justify-content:center;gap:20px;flex-wrap:wrap">
         <a href="#" onclick="showAbout()">About Us</a>
         <a href="#" onclick="showContact()">Contact</a>
+        <a href="#" onclick="showPromotionPricing()">🎵 Promote Music</a>
         <a href="#" onclick="showPrivacy()">Privacy Policy</a>
         <a href="#" onclick="showTerms()">Terms of Service</a>
         <a href="#" onclick="showDMCA()">DMCA / Copyright</a>
@@ -4200,17 +4201,27 @@
               </div>
             </div>`).join('');
         } else if (tab === 'approved') {
-          const d = await api('/songs?limit=100&category=all');
+          const d = await api('/songs?limit=200&category=all');
           const list = d.songs || [];
           document.getElementById('adminApprovedCount').textContent = list.length;
           c.innerHTML = list.map(s => `
-            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px">
-              <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:10px;margin-bottom:6px;flex-wrap:wrap">
+              <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <div style="flex:1;min-width:0">
-                <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
-                <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ▶ ${s.play_count || 0}</div>
+                <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
+                  ${esc(s.title)}
+                  ${s.is_song_of_day ? '<span style="background:#f59e0b;color:white;font-size:9px;padding:2px 6px;border-radius:50px;font-weight:700">☀️ SOTD</span>' : ''}
+                  ${s.is_featured ? '<span style="background:#6366f1;color:white;font-size:9px;padding:2px 6px;border-radius:50px;font-weight:700">⭐ FEAT</span>' : ''}
+                  ${s.sponsored_until && new Date(s.sponsored_until) > new Date() ? '<span style="background:#10b981;color:white;font-size:9px;padding:2px 6px;border-radius:50px;font-weight:700">⚡ SPONSORED</span>' : ''}
+                </div>
+                <div style="font-size:11px;color:var(--muted)">${esc(s.artist)} • ▶ ${s.play_count || 0} • ⬇ ${s.download_count || 0}</div>
               </div>
-              <button onclick="adminDelete(${s.id})" style="background:#ef4444;color:white;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Delete</button>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0">
+                <button onclick="adminSetSongOfDay(${s.id},${s.is_song_of_day})" style="background:${s.is_song_of_day ? 'rgba(245,158,11,.3)' : 'rgba(245,158,11,.12)'};color:#f59e0b;border:1px solid rgba(245,158,11,.3);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer" title="${s.is_song_of_day ? 'Remove Song of Day' : 'Set as Song of Day'}">☀️</button>
+                <button onclick="adminToggleFeatured(${s.id},${s.is_featured})" style="background:${s.is_featured ? 'rgba(99,102,241,.3)' : 'rgba(99,102,241,.1)'};color:#818cf8;border:1px solid rgba(99,102,241,.3);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer" title="${s.is_featured ? 'Unfeature' : 'Feature song'}">⭐</button>
+                <button onclick="adminEditSongCover(${s.id},'${esc(s.title)}')" style="background:rgba(168,85,247,.12);color:#a855f7;border:1px solid rgba(168,85,247,.3);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer" title="Edit cover">🖼️</button>
+                <button onclick="adminDelete(${s.id})" style="background:#ef4444;color:white;border:none;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">🗑️</button>
+              </div>
             </div>`).join('');
         } else if (tab === 'users') {
           const d = await api('/songs/admin/users');
@@ -4224,9 +4235,58 @@
               </div>
             </div>`).join('');
         } else if (tab === 'verifications') {
-          c.innerHTML = '<p style="color:var(--muted);padding:20px">Verification requests will appear here.</p>';
+          try {
+            const d = await api('/verification/requests');
+            const reqs = d.requests || [];
+            if (!reqs.length) {
+              c.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:40px;margin-bottom:12px">🎤</div><div style="font-size:16px;font-weight:700">No verification requests</div><div style="font-size:13px;margin-top:6px">Artists will appear here when they request verification.</div></div>';
+              return;
+            }
+            c.innerHTML = reqs.map(r => `
+              <div style="background:var(--bg);border-radius:12px;padding:14px 16px;margin-bottom:8px;border-left:4px solid ${r.status === 'approved' ? '#22c55e' : r.status === 'rejected' ? '#ef4444' : '#f59e0b'}">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:14px">${esc(r.artist_name)}</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">📞 ${esc(r.phone)} • Submitted ${new Date(r.submitted_at).toLocaleDateString()}</div>
+                    <div style="font-size:12px;color:var(--text);margin-top:4px">${esc(r.reason)}</div>
+                    ${r.social_links ? `<div style="font-size:11px;color:var(--pink);margin-top:3px">🔗 ${esc(r.social_links)}</div>` : ''}
+                  </div>
+                  <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:50px;background:${r.status === 'approved' ? 'rgba(34,197,94,.15)' : r.status === 'rejected' ? 'rgba(239,68,68,.15)' : 'rgba(245,158,11,.15)'};color:${r.status === 'approved' ? '#22c55e' : r.status === 'rejected' ? '#ef4444' : '#f59e0b'};white-space:nowrap">${r.status.toUpperCase()}</span>
+                </div>
+                ${r.status === 'pending' ? `
+                <div style="display:flex;gap:8px;margin-top:10px">
+                  <button onclick="adminReviewVerification(${r.id},'approved')" style="background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Approve</button>
+                  <button onclick="adminReviewVerification(${r.id},'rejected')" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Reject</button>
+                </div>` : ''}
+              </div>`).join('');
+          } catch (e) {
+            c.innerHTML = '<p style="color:var(--muted);padding:20px">Could not load verification requests.</p>';
+          }
         } else if (tab === 'featured') {
-          c.innerHTML = '<p style="color:var(--muted);padding:20px">Featured management coming soon.</p>';
+          // Featured songs management
+          try {
+            const d = await api('/songs?limit=200&category=all');
+            const featured = (d.songs || []).filter(s => s.is_featured);
+            const notFeatured = (d.songs || []).filter(s => !s.is_featured).slice(0, 20);
+            c.innerHTML = `
+              <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--pink)">⭐ Currently Featured (${featured.length})</div>
+              ${featured.map(s => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">
+                  <img src="${imgSrc(s.cover_path)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+                  <div style="flex:1;min-width:0;font-size:13px;font-weight:600">${esc(s.title)}</div>
+                  <button onclick="adminToggleFeatured(${s.id},true)" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Remove</button>
+                </div>`).join('')}
+              ${!featured.length ? '<p style="color:var(--muted);font-size:13px;margin-bottom:16px">No featured songs yet.</p>' : ''}
+              <div style="font-size:14px;font-weight:700;margin:16px 0 12px;color:var(--muted)">Add to Featured:</div>
+              ${notFeatured.map(s => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">
+                  <img src="${imgSrc(s.cover_path)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+                  <div style="flex:1;min-width:0;font-size:13px;font-weight:600">${esc(s.title)}<span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(s.artist)}</span></div>
+                  <button onclick="adminToggleFeatured(${s.id},false)" style="background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">⭐ Feature</button>
+                </div>`).join('')}`;
+          } catch(e) {
+            c.innerHTML = '<p style="color:var(--muted);padding:20px">Could not load songs.</p>';
+          }
         } else if (tab === 'revenue') {
           const stats = await api('/admin/stats');
           c.innerHTML = `
@@ -4284,7 +4344,114 @@
       }
     }
 
-    async function adminDelete(id) {      if (!confirm('Delete this song?')) return;
+    // ── Song of the Day ──────────────────────────────────────────
+    async function adminSetSongOfDay(id, isCurrentlySet) {
+      try {
+        if (isCurrentlySet) {
+          await api('/songs/' + id, { method: 'PATCH', body: JSON.stringify({ is_song_of_day: false }) });
+          showToast('Song of the Day removed', 'ℹ️');
+        } else {
+          // Unset any existing Song of Day first
+          await api('/songs/admin/song-of-day', { method: 'PATCH', body: JSON.stringify({ song_id: id }) }).catch(() =>
+            api('/songs/' + id, { method: 'PATCH', body: JSON.stringify({ is_song_of_day: true }) })
+          );
+          showToast('☀️ Song of the Day set!', '✅');
+        }
+        loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab="approved"]'));
+      } catch (e) { showToast(e.message, '❌'); }
+    }
+
+    // ── Featured Toggle ───────────────────────────────────────────
+    async function adminToggleFeatured(id, isCurrentlyFeatured) {
+      try {
+        await api('/songs/' + id, { method: 'PATCH', body: JSON.stringify({ is_featured: !isCurrentlyFeatured }) });
+        showToast(isCurrentlyFeatured ? 'Removed from featured' : '⭐ Song featured!', '✅');
+        loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab="approved"]'));
+      } catch (e) { showToast(e.message, '❌'); }
+    }
+
+    // ── Edit Song Cover ───────────────────────────────────────────
+    function adminEditSongCover(id, title) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        showToast('Uploading cover...', '⏳');
+        try {
+          const fd = new FormData();
+          fd.append('cover', file);
+          const res = await fetch(API + '/api/songs/' + id + '/cover', {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + token },
+            body: fd
+          });
+          if (!res.ok) throw new Error('Cover upload failed');
+          showToast('✅ Cover updated for "' + title + '"', '🖼️');
+          loadAdminTab('approved', document.querySelector('.admin-tab[data-admin-tab="approved"]'));
+          loadSongs(true);
+        } catch (e) { showToast(e.message, '❌'); }
+      };
+      input.click();
+    }
+
+    // ── Verification Review ───────────────────────────────────────
+    async function adminReviewVerification(id, status) {
+      try {
+        await api('/verification/review/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify({ status, admin_notes: '' })
+        });
+        showToast(status === 'approved' ? '✅ Artist verified!' : 'Request rejected', status === 'approved' ? '✅' : 'ℹ️');
+        loadAdminTab('verifications', document.querySelector('.admin-tab[data-admin-tab="verifications"]'));
+      } catch (e) { showToast(e.message, '❌'); }
+    }
+
+    // ── Promotion pricing page ────────────────────────────────────
+    function showPromotionPricing() {
+      showInfoModal('📢 Music Promotion Packages', `
+        <div style="font-size:13px;line-height:1.7">
+          <p style="color:var(--muted);margin-bottom:20px">Get your music heard by thousands of Ugandan music fans on DJ Musta.</p>
+          <div style="display:grid;gap:14px">
+            <div style="background:var(--bg);border-radius:12px;padding:16px;border:1px solid var(--border)">
+              <div style="font-weight:800;font-size:15px;margin-bottom:4px">🥉 Basic — UGX 50,000</div>
+              <div style="color:var(--muted);font-size:12px;margin-bottom:8px">7 days featured on homepage</div>
+              <ul style="color:var(--text);font-size:12px;margin-left:16px;line-height:2">
+                <li>Featured in homepage sections</li>
+                <li>Song of the Day for 1 day</li>
+                <li>Social media post</li>
+              </ul>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(99,102,241,.12));border-radius:12px;padding:16px;border:1px solid rgba(168,85,247,.3)">
+              <div style="font-weight:800;font-size:15px;margin-bottom:4px;color:#c084fc">🥇 Premium — UGX 150,000</div>
+              <div style="color:var(--muted);font-size:12px;margin-bottom:8px">30 days maximum exposure</div>
+              <ul style="color:var(--text);font-size:12px;margin-left:16px;line-height:2">
+                <li>Top of homepage (Sponsored badge)</li>
+                <li>Song of the Day for 3 days</li>
+                <li>Featured for 30 days</li>
+                <li>Push notification to all subscribers</li>
+                <li>Multiple social media posts</li>
+              </ul>
+            </div>
+            <div style="background:var(--bg);border-radius:12px;padding:16px;border:1px solid var(--border)">
+              <div style="font-weight:800;font-size:15px;margin-bottom:4px">🎤 Artist Profile — UGX 80,000</div>
+              <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Get verified + profile setup</div>
+              <ul style="color:var(--text);font-size:12px;margin-left:16px;line-height:2">
+                <li>✓ Verified badge on all songs</li>
+                <li>Artist bio + photo setup</li>
+                <li>Dedicated artist page</li>
+              </ul>
+            </div>
+          </div>
+          <div style="margin-top:20px;text-align:center">
+            <a href="https://wa.me/256783133389?text=Hi%20DJ%20Musta%2C%20I%20want%20to%20promote%20my%20music" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#25d366,#128c7e);color:white;padding:12px 28px;border-radius:50px;font-weight:700;font-size:14px;text-decoration:none">💬 Contact on WhatsApp</a>
+          </div>
+        </div>`);
+    }
+
+    async function adminDelete(id) {
+      if (!confirm('Delete this song?')) return;
       try {
         await api('/songs/' + id, { method: 'DELETE' });
         showToast('Song deleted', '🗑️');

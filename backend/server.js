@@ -1356,8 +1356,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
         console.log(`[Bulk Delete] Admin ${user.id} deleted ${deleted} songs: ${safeIds.join(', ')}`);
         return J(200, { success: true, deleted });
     }
-    if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='approve') {
-        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+    if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='approve') {        if (!user?.isAdmin) return J(403, { error:'Admin only' });
         await query('UPDATE songs SET approved=TRUE WHERE id=$1', [seg[1]]);
         
         // AUTO-UPDATE SITEMAP
@@ -1415,7 +1414,34 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     }
 
     // â”€â”€ POST /api/songs/:id/like â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (method === 'POST' && seg[0]==='songs' && seg[2]==='like') {
+    // PATCH /api/songs/:id - update fields (admin: is_featured, is_song_of_day, etc.)
+    if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const body = await parseJSON(req);
+        const allowed = ['title','artist','genre','duration','lyrics','release_year',
+                         'is_featured','is_song_of_day','sponsored_until','sponsor_name'];
+        const sets = []; const vals = [];
+        for (const key of allowed) {
+            if (body[key] !== undefined) { vals.push(body[key]); sets.push(key+'=$'+vals.length); }
+        }
+        if (!sets.length) return J(400, { error:'No valid fields' });
+        if (body.is_song_of_day === true) {
+            await query('UPDATE songs SET is_song_of_day=FALSE WHERE is_song_of_day=TRUE');
+        }
+        vals.push(seg[1]);
+        await query('UPDATE songs SET '+sets.join(',')+'WHERE id=$'+vals.length, vals);
+        return J(200, { success:true });
+    }
+
+    // PATCH /api/songs/admin/song-of-day
+    if (method === 'PATCH' && pathname === '/api/songs/admin/song-of-day') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const { song_id } = await parseJSON(req);
+        await query('UPDATE songs SET is_song_of_day=FALSE WHERE is_song_of_day=TRUE');
+        if (song_id) await query('UPDATE songs SET is_song_of_day=TRUE WHERE id=$1', [song_id]);
+        return J(200, { success:true });
+    }
+        if (method === 'POST' && seg[0]==='songs' && seg[2]==='like') {
         if (!user) return J(401, { error:'Login required' });
         const songId = parseInt(seg[1]);
         const song   = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [songId]);
