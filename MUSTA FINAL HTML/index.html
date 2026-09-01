@@ -2769,6 +2769,11 @@
       addToHistory(s);
       updateSEO(s);
 
+      // Update URL to pretty song slug for easy sharing
+      const slugify = v => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+      const songSlug = `/song/${slugify(s.title) || 'song-' + id}/${slugify(s.artist)}`;
+      window.history.replaceState({ songId: id }, s.title + ' | DJ Musta', songSlug);
+
       // Update play count
       api('/songs/' + id + '/play', { method: 'POST' }).catch(() => {});
     }

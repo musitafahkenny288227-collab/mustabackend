@@ -640,7 +640,7 @@ ${durationSec ? `<meta property="music:duration" content="${durationSec}">` : ''
   ${playCount ? `<div class="plays">▶ ${playCount}</div>` : ''}
 
   <div class="btns">
-    <a class="btn-play" href="/?song=${song.id}">▶ Stream Free</a>
+    <a class="btn-play" href="${songUrl}">▶ Stream Free</a>
     <a class="btn-dl" href="${API_BASE}/api/songs/${song.id}/download-file" target="_blank" rel="noopener">⬇ Download MP3</a>
   </div>
 
@@ -654,7 +654,7 @@ ${durationSec ? `<meta property="music:duration" content="${durationSec}">` : ''
 <!-- Auto-redirect to full SPA player after 2s -->
 <script>
   setTimeout(function() {
-    window.location.href = '/?song=${song.id}';
+    window.location.href = '${songUrl}';
   }, 2000);
 </script>
 
