@@ -3614,6 +3614,186 @@
     }
 
     // ============================================================
+    // BULK UPLOAD
+    // ============================================================
+    let bulkAudioFiles = [];
+    let bulkCoverFiles = [];
+
+    function onBulkAudioSelected(input) {
+      bulkAudioFiles = Array.from(input.files);
+      const nameEl = document.getElementById('bulkAudioFileName');
+      const listEl = document.getElementById('bulkAudioList');
+
+      if (!bulkAudioFiles.length) {
+        nameEl.textContent = 'Click to select multiple MP3 files';
+        listEl.innerHTML = '';
+        return;
+      }
+
+      nameEl.textContent = `${bulkAudioFiles.length} file${bulkAudioFiles.length > 1 ? 's' : ''} selected`;
+
+      // Preview list with auto-detected names
+      listEl.innerHTML = bulkAudioFiles.map((f, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;font-size:13px">
+          <span style="color:var(--pink);font-weight:700;width:24px;text-align:center">${i + 1}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(f.name.replace(/\.mp3$/i, ''))}</span>
+          <span style="color:var(--muted);font-size:11px;flex-shrink:0">${(f.size / 1024 / 1024).toFixed(1)} MB</span>
+        </div>`).join('');
+    }
+
+    function onBulkCoverSelected(input) {
+      bulkCoverFiles = Array.from(input.files);
+      const nameEl = document.getElementById('bulkCoverFileName');
+      const listEl = document.getElementById('bulkCoverList');
+
+      if (!bulkCoverFiles.length) {
+        nameEl.textContent = 'Click to select cover images';
+        listEl.innerHTML = '';
+        return;
+      }
+
+      nameEl.textContent = `${bulkCoverFiles.length} image${bulkCoverFiles.length > 1 ? 's' : ''} selected`;
+
+      // Show thumbnails
+      listEl.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
+        bulkCoverFiles.map((f, i) => {
+          const url = URL.createObjectURL(f);
+          return `<div style="text-align:center">
+            <img src="${url}" style="width:52px;height:52px;border-radius:6px;object-fit:cover;border:2px solid var(--border)"/>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${i + 1}</div>
+          </div>`;
+        }).join('') + '</div>';
+    }
+
+    async function uploadBulkSongs() {
+      if (!currentUser) return showAuth();
+      if (!bulkAudioFiles.length) return showToast('Please select MP3 files first', '⚠️');
+
+      // Copyright check
+      const declared = document.getElementById('copyrightDeclaration')?.checked;
+      // Bulk has its own check - ask once
+      if (!confirm('Copyright Declaration:\n\nI confirm I own the rights to all selected songs or have permission to upload them.\n\nClick OK to proceed.')) return;
+
+      const btn = document.getElementById('bulkUploadBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Uploading...';
+
+      const titles = (document.getElementById('bulkTitles')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+      const artists = (document.getElementById('bulkArtists')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+      const genres = (document.getElementById('bulkGenres')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+      const durations = (document.getElementById('bulkDurations')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+      const releaseYear = document.getElementById('bulkReleaseYear')?.value || '';
+
+      // Show progress area
+      const progressWrap = document.getElementById('bulkUploadProgress');
+      const progressBars = document.getElementById('bulkProgressBars');
+      progressWrap.style.display = 'block';
+
+      // Create a progress row for each file
+      progressBars.innerHTML = bulkAudioFiles.map((f, i) => `
+        <div id="bulk-row-${i}" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${esc(titles[i] || f.name.replace(/\.mp3$/i,''))}</span>
+            <span id="bulk-status-${i}" style="font-size:11px;color:var(--muted);flex-shrink:0">Waiting...</span>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden">
+            <div id="bulk-bar-${i}" style="height:100%;background:var(--pink);width:0%;transition:width .3s;border-radius:4px"></div>
+          </div>
+        </div>`).join('');
+
+      let succeeded = 0;
+      let failed = 0;
+
+      // Upload one by one
+      for (let i = 0; i < bulkAudioFiles.length; i++) {
+        const audioFile = bulkAudioFiles[i];
+        const cover = bulkCoverFiles[i] || null;
+
+        // Auto-detect title from filename if not provided
+        const rawName = audioFile.name.replace(/\.mp3$/i, '').replace(/[_-]/g, ' ').trim();
+        const title = titles[i] || rawName;
+        const artist = artists[i] || 'Unknown Artist';
+        const genre = genres[i] || 'Other';
+        const duration = durations[i] || '3:00';
+
+        const statusEl = document.getElementById(`bulk-status-${i}`);
+        const barEl = document.getElementById(`bulk-bar-${i}`);
+
+        statusEl.textContent = 'Uploading...';
+        statusEl.style.color = '#f59e0b';
+
+        try {
+          await new Promise((resolve, reject) => {
+            const fd = new FormData();
+            fd.append('title', title);
+            fd.append('artist', artist);
+            fd.append('genre', genre);
+            fd.append('duration', duration);
+            if (releaseYear) fd.append('release_year', releaseYear);
+            fd.append('song', audioFile);
+            if (cover) fd.append('cover', cover);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', API + '/api/songs');
+            if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+
+            xhr.upload.onprogress = e => {
+              if (e.lengthComputable) {
+                const pct = Math.round(e.loaded / e.total * 100);
+                if (barEl) barEl.style.width = pct + '%';
+                if (statusEl) statusEl.textContent = pct + '%';
+              }
+            };
+
+            xhr.onload = () => {
+              try {
+                const d = JSON.parse(xhr.responseText);
+                if (xhr.status < 300) resolve(d);
+                else reject(new Error(d.error || 'Upload failed'));
+              } catch (e) { reject(new Error('Invalid response')); }
+            };
+            xhr.onerror = () => reject(new Error('Network error'));
+            xhr.send(fd);
+          });
+
+          // Success
+          if (barEl) barEl.style.background = '#22c55e';
+          if (statusEl) { statusEl.textContent = '✅ Done'; statusEl.style.color = '#22c55e'; }
+          succeeded++;
+
+        } catch (err) {
+          // Failed
+          if (barEl) { barEl.style.width = '100%'; barEl.style.background = '#ef4444'; }
+          if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = '#ef4444'; }
+          failed++;
+        }
+      }
+
+      // All done
+      btn.disabled = false;
+      btn.textContent = '📦 Upload All Songs';
+
+      const summary = `✅ ${succeeded} uploaded${failed ? `, ❌ ${failed} failed` : ''}`;
+      showToast(summary, succeeded > 0 ? '🎵' : '❌');
+
+      if (succeeded > 0) {
+        // Reset form
+        bulkAudioFiles = [];
+        bulkCoverFiles = [];
+        document.getElementById('bulkAudioFiles').value = '';
+        document.getElementById('bulkCoverFiles').value = '';
+        document.getElementById('bulkAudioFileName').textContent = 'Click to select multiple MP3 files';
+        document.getElementById('bulkCoverFileName').textContent = 'Click to select cover images';
+        document.getElementById('bulkAudioList').innerHTML = '';
+        document.getElementById('bulkCoverList').innerHTML = '';
+        document.getElementById('bulkTitles').value = '';
+        document.getElementById('bulkArtists').value = '';
+        document.getElementById('bulkGenres').value = '';
+        document.getElementById('bulkDurations').value = '';
+        // Reload songs after a short delay
+        setTimeout(() => loadSongs(true), 1500);
+      }
+    }
     // PROFILE
     // ============================================================
     function showProfile() {
