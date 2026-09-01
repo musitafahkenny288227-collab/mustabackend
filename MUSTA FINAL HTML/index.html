@@ -209,10 +209,34 @@
     gtag('config', 'G-RXCS6LWMP9');
   </script>
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <!-- Preload critical font to reduce FCP -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet"></noscript>
 
   <style>
     /* ===== RESET & BASE ===== */
+    /* ── CLS FIXES: reserve space before content loads ── */
+    /* Prevent layout shift from images loading */
+    img { width: 100%; height: auto; }
+    img[width][height] { aspect-ratio: attr(width) / attr(height); }
+    /* Reserve space for player so content doesn't jump */
+    body { min-height: 100vh; }
+    /* Prevent font flash causing layout shift */
+    * { font-display: swap; }
+    /* Reserve space for promotion bar */
+    #promotionBar { min-height: 34px; }
+    /* Reserve space for header */
+    #siteHeader { min-height: 56px; }
+    /* Reserve space for hero */
+    .hero-section { min-height: 160px; }
+    /* Reserve space for audio player */
+    #audioPlayer { min-height: 0; }
+    /* Song cards keep aspect ratio */
+    .image-wrapper, .card-img-wrap { aspect-ratio: 1/1; overflow: hidden; }
+    /* Skeleton cards keep size */
+    .skeleton-card { aspect-ratio: 1/1; }
     *,
     *::before,
     *::after {
