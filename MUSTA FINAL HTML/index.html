@@ -68,6 +68,13 @@
     };
   </script>
 
+  <!-- ID3 tag writer for embedding thumbnails in downloaded MP3s -->
+  <script type="module">
+    import { ID3Writer } from 'https://cdn.jsdelivr.net/npm/browser-id3-writer@6.4.0/dist/browser-id3-writer.mjs';
+    window.ID3Writer = ID3Writer;
+    console.log('✅ ID3Writer loaded');
+  </script>
+
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-RXCS6LWMP9"></script>
   <script>
@@ -3121,9 +3128,16 @@
       showToast('Downloading ' + title + '...', '⬇️');
 
       try {
-        // Try ID3-tagged download using browser-id3-writer
-        const ID3Writer = window.ID3Writer;
-        if (!ID3Writer) throw new Error('ID3 writer not ready');
+        // Wait for ID3Writer to load (ES module may load slightly after page)
+        let ID3Writer = window.ID3Writer;
+        if (!ID3Writer) {
+          // Wait up to 3 seconds for it to load
+          for (let i = 0; i < 30; i++) {
+            await new Promise(r => setTimeout(r, 100));
+            if (window.ID3Writer) { ID3Writer = window.ID3Writer; break; }
+          }
+        }
+        if (!ID3Writer) throw new Error('ID3 writer not available');
 
         // Fetch audio and cover in parallel
         // Use images.weserv.nl to proxy cover (handles CORS + converts SVG to JPG)
