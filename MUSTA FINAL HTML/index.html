@@ -804,29 +804,94 @@
       </div>
       <div id="userMenu" style="display:none;position:relative">
         <div id="userAvatar" style="width:36px;height:36px;border-radius:50%;background:#a855f7;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;cursor:pointer;border:2px solid rgba(168,85,247,.5);font-size:14px;overflow:hidden;box-shadow:0 2px 8px rgba(168,85,247,.4)" onclick="toggleUserDrop()">U</div>
-        <div id="userDrop" style="display:none;position:absolute;top:44px;right:0;background:#172238;border-radius:10px;padding:7px;min-width:224px;box-shadow:0 16px 38px rgba(0,0,0,.38);border:1px solid #334968;z-index:2000">
-          <div class="user-drop-heading" style="display:flex;flex-direction:column;gap:3px;padding:8px 10px 10px;border-bottom:1px solid #2b3b55;margin-bottom:5px">
-            <span style="color:#93a4bd;font-size:9px;font-weight:800;letter-spacing:.14em">ACCOUNT</span>
-            <b style="color:#f8fafc;font-size:12px;font-weight:750">DJ Musta member</b>
+        <div id="userDrop" style="display:none;position:absolute;top:48px;right:0;background:#0f1829;border-radius:14px;padding:8px;min-width:220px;box-shadow:0 20px 48px rgba(0,0,0,.55);border:1px solid rgba(148,163,184,.12);z-index:2000;overflow:hidden">
+
+          <!-- User info header -->
+          <div style="padding:12px 14px 10px;border-bottom:1px solid rgba(148,163,184,.1);margin-bottom:4px">
+            <div style="font-size:9px;font-weight:800;letter-spacing:.14em;color:#64748b;text-transform:uppercase;margin-bottom:4px">Account</div>
+            <div id="userDropName" style="font-size:14px;font-weight:700;color:#f1f5f9">DJ Musta</div>
+            <div id="userDropEmail" style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
           </div>
-          <a class="user-drop-item" href="#" onclick="showSection('uploadSection');closeUserDrop()" style="display:flex;align-items:center;min-height:36px;padding:8px 10px;border-radius:6px;color:#dbe4f0;font-size:12px;font-weight:650;transition:all .16s ease">Upload Song</a>
-          <a class="user-drop-item" href="#" onclick="navToPage('playlists');closeUserDrop()">My Playlists</a>
-          <a class="user-drop-item" href="#" onclick="showProfile();closeUserDrop()">My Profile</a>
-          <a class="user-drop-item" href="#" onclick="requestVerification();closeUserDrop()">Get Verified</a>
-          <div class="user-drop-divider" style="height:1px;margin:6px 8px;background:#2b3b55"></div>
-          <a class="user-drop-item user-drop-admin" href="#" id="adminLink" style="display:none" onclick="showSection('adminSection');loadAdminTab('overview',null);closeUserDrop()">Admin Panel</a>
-          <a class="user-drop-item user-drop-admin" href="#" id="analyticsLink" style="display:none" onclick="showAnalyticsDashboard();closeUserDrop()">Analytics</a>
-          <a class="user-drop-item user-drop-admin" href="#" id="adminPwdLink" style="display:none" onclick="showAdminPasswordChange();closeUserDrop()">Change Password</a>
-          <div class="user-drop-divider" style="height:1px;margin:6px 8px;background:#2b3b55"></div>
-          <a class="user-drop-item user-drop-logout" href="#" onclick="logout();closeUserDrop()" style="color:#fda4af !important">Logout</a>
-          <div id="mobileMenuExtras" style="display:none;border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
-            <a class="user-drop-item" href="#" onclick="showPremiumUpgrade();closeUserDrop()">Premium</a>
-            <a class="user-drop-item" href="#" onclick="showLanguageSelector();closeUserDrop()">Language</a>
+
+          <!-- Main menu items -->
+          <a class="udrop-item" href="#" onclick="showSection('uploadSection');closeUserDrop()">
+            <span class="udrop-icon">⬆️</span> Upload Song
+          </a>
+          <a class="udrop-item" href="#" onclick="navToPage('playlists');closeUserDrop()">
+            <span class="udrop-icon">📋</span> My Playlists
+          </a>
+          <a class="udrop-item" href="#" onclick="showProfile();closeUserDrop()">
+            <span class="udrop-icon">👤</span> My Profile
+          </a>
+          <a class="udrop-item" href="#" onclick="requestVerification();closeUserDrop()">
+            <span class="udrop-icon">✅</span> Get Verified
+          </a>
+
+          <!-- Admin items (hidden by default) -->
+          <div id="adminDropGroup" style="display:none;border-top:1px solid rgba(148,163,184,.1);margin:4px 0;padding-top:4px">
+            <div style="font-size:9px;font-weight:800;letter-spacing:.14em;color:#f59e0b;padding:4px 12px 2px;text-transform:uppercase">Admin</div>
+            <a class="udrop-item udrop-admin" href="#" id="adminLink" onclick="showSection('adminSection');loadAdminTab('overview',null);closeUserDrop()">
+              <span class="udrop-icon">⚙️</span> Admin Panel
+            </a>
+            <a class="udrop-item udrop-admin" href="#" id="analyticsLink" onclick="showAnalyticsDashboard();closeUserDrop()">
+              <span class="udrop-icon">📊</span> Analytics
+            </a>
+            <a class="udrop-item udrop-admin" href="#" id="adminPwdLink" onclick="showAdminPasswordChange();closeUserDrop()">
+              <span class="udrop-icon">🔑</span> Change Password
+            </a>
+          </div>
+
+          <!-- Mobile extras -->
+          <div id="mobileMenuExtras" style="display:none;border-top:1px solid rgba(148,163,184,.1);margin:4px 0;padding-top:4px">
+            <a class="udrop-item" href="#" onclick="showPremiumUpgrade();closeUserDrop()">
+              <span class="udrop-icon">👑</span> Premium
+            </a>
+            <a class="udrop-item" href="#" onclick="showLanguageSelector();closeUserDrop()">
+              <span class="udrop-icon">🌍</span> Language
+            </a>
+          </div>
+
+          <!-- Logout -->
+          <div style="border-top:1px solid rgba(148,163,184,.1);margin:4px 0;padding-top:4px">
+            <a class="udrop-item udrop-logout" href="#" onclick="logout();closeUserDrop()">
+              <span class="udrop-icon">🚪</span> Logout
+            </a>
           </div>
         </div>
       </div>
     </div>
   </header>
+
+  <style>
+    /* ── USER DROPDOWN MENU ───────────────────────────────────── */
+    .udrop-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      text-decoration: none !important;
+      transition: background .15s, color .15s;
+      cursor: pointer;
+    }
+    .udrop-item:hover {
+      background: rgba(168,85,247,.12);
+      color: #fff;
+    }
+    .udrop-icon {
+      font-size: 15px;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .udrop-admin { color: #fcd34d; }
+    .udrop-admin:hover { background: rgba(245,158,11,.12); color: #fde68a; }
+    .udrop-logout { color: #fda4af; }
+    .udrop-logout:hover { background: rgba(239,68,68,.1); color: #fca5a5; }
+  </style>
 
   <!-- ===== NAVIGATION ===== -->
   <nav style="background:var(--nav);padding:9px 20px;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;border-bottom:1px solid #2a2a4a;overflow-x:auto;scrollbar-width:none">
@@ -2096,9 +2161,16 @@
           avatar.textContent = (currentUser.username || 'U').charAt(0).toUpperCase();
         }
         const isAdmin = currentUser.is_admin || currentUser.isAdmin;
-        document.getElementById('adminLink').style.display = isAdmin ? 'block' : 'none';
-        document.getElementById('adminPwdLink').style.display = isAdmin ? 'block' : 'none';
-        document.getElementById('analyticsLink').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('adminLink').style.display = isAdmin ? 'flex' : 'none';
+        document.getElementById('adminPwdLink').style.display = isAdmin ? 'flex' : 'none';
+        document.getElementById('analyticsLink').style.display = isAdmin ? 'flex' : 'none';
+        const adminGroup = document.getElementById('adminDropGroup');
+        if (adminGroup) adminGroup.style.display = isAdmin ? 'block' : 'none';
+        // Fill user name and email in dropdown header
+        const dropName = document.getElementById('userDropName');
+        const dropEmail = document.getElementById('userDropEmail');
+        if (dropName) dropName.textContent = currentUser.username || 'DJ Musta';
+        if (dropEmail) dropEmail.textContent = currentUser.email || '';
         // Premium hide ads
         if (currentUser.isPremium || currentUser.is_premium) {
           document.querySelectorAll('[data-ad-container]').forEach(el => el.style.display = 'none');
