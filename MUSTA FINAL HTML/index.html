@@ -237,8 +237,6 @@
     .image-wrapper, .card-img-wrap { aspect-ratio: 1/1; overflow: hidden; }
     /* Skeleton cards keep size */
     .skeleton-card { aspect-ratio: 1/1; }
-    /* Reserve minimum height for song grids to prevent CLS when cards load */
-    #songsGrid, .music-grid { min-height: 320px; }
     /* Hero carousel images — reserve height to prevent CLS */
     .hero-section .album-card { aspect-ratio: 4/3; }
     .hero-section .album-card img { width: 100%; height: 100%; object-fit: cover; }
@@ -378,6 +376,7 @@
       grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
       gap: 14px;
       padding: 4px 2px 10px;
+      align-items: start;
     }
 
     .music-list {
@@ -411,6 +410,7 @@
       transition: transform 0.2s, box-shadow 0.2s;
       border: 1px solid rgba(148, 163, 184, 0.12);
       box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
+      align-self: start; /* ← prevents card stretching to fill grid row */
     }
     .song-card:hover {
       transform: translateY(-4px);
@@ -538,16 +538,19 @@
 
     .card-details {
       padding: 8px 8px 10px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }
     .song-title {
       font-size: 12px;
       font-weight: 700;
-      margin: 0 0 3px;
+      margin: 0 0 2px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       color: var(--text);
-      line-height: 1.2;
+      line-height: 1.3;
     }
     .artist-name {
       font-size: 11px;
