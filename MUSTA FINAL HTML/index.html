@@ -601,40 +601,54 @@
     .card-actions-row {
       display: flex;
       align-items: center;
-      gap: 4px;
-      margin-top: 6px;
+      gap: 6px;
+      margin-top: 8px;
     }
     .ca-btn {
       border: none;
-      border-radius: 8px;
       cursor: pointer;
-      font-size: 13px;
       font-weight: 700;
-      padding: 0;
-      height: 30px;
-      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all .15s ease;
-      background: transparent !important;
+      transition: all .18s ease;
+      flex-shrink: 0;
     }
-    .ca-btn:active { transform: scale(0.92); }
+    .ca-btn:active { transform: scale(0.9); }
     .ca-play {
-      color: #00d4aa;
-      border: 1px solid rgba(0,212,170,.45) !important;
+      flex: 1;
+      height: 32px;
+      border-radius: 50px;
+      background: linear-gradient(135deg, #00d4aa, #06b6d4);
+      color: #000;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      gap: 5px;
+      box-shadow: 0 3px 12px rgba(0,212,170,.3);
+      border: none !important;
     }
-    .ca-play:hover { border-color: rgba(0,212,170,.9) !important; color: #fff; }
+    .ca-play:hover { box-shadow: 0 4px 18px rgba(0,212,170,.55); filter: brightness(1.1); }
     .ca-dl {
-      color: #6ee7b7;
-      border: 1px solid rgba(16,185,129,.4) !important;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(16,185,129,.08);
+      color: #34d399;
+      font-size: 14px;
+      border: 1.5px solid rgba(16,185,129,.4) !important;
     }
-    .ca-dl:hover { border-color: rgba(16,185,129,.85) !important; color: #fff; }
+    .ca-dl:hover { background: rgba(16,185,129,.2); box-shadow: 0 0 10px rgba(16,185,129,.3); }
     .ca-share {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(6,182,212,.08);
       color: #67e8f9;
-      border: 1px solid rgba(6,182,212,.4) !important;
+      font-size: 13px;
+      border: 1.5px solid rgba(6,182,212,.4) !important;
     }
-    .ca-share:hover { border-color: rgba(6,182,212,.85) !important; color: #fff; }
+    .ca-share:hover { background: rgba(6,182,212,.2); box-shadow: 0 0 10px rgba(6,182,212,.3); }
 
     .sc-eq {
       display: inline-flex;
@@ -1091,6 +1105,513 @@
       }
     }
   </style>
+<style id="djmusta-visual-redesign">
+/* ============================================================
+   DJ MUSTA VISUAL REDESIGN — COLOR + UI ONLY
+   Functionality, IDs, HTML structure and JavaScript are preserved.
+   Palette: Midnight / Charcoal / Tangerine / Ivory
+   ============================================================ */
+
+:root {
+  --primary: #ff6b00 !important;
+  --primary-dark: #e85d00 !important;
+  --primary-light: #ff8a33 !important;
+  --secondary: #ffb000 !important;
+  --accent: #ff8a33 !important;
+  --pink: #ff6b00 !important;
+  --pink-dim: rgba(255,107,0,.10) !important;
+  --pink-dark: #e85d00 !important;
+
+  --bg: #090b0e !important;
+  --bg-secondary: #101419 !important;
+  --card: #14191f !important;
+  --text: #f5f7fa !important;
+  --muted: #9ba3ad !important;
+  --border: #252c34 !important;
+  --nav: #0b0e12 !important;
+  --deep: #06080a !important;
+}
+
+body,
+body.dark {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255,107,0,.075), transparent 34%),
+    linear-gradient(180deg, #090b0e 0%, #0a0d11 48%, #080a0d 100%) !important;
+  color: #f5f7fa !important;
+}
+
+/* Clean, single-brand accent instead of rainbow */
+body::after {
+  height: 3px !important;
+  background: linear-gradient(90deg, #ff6b00, #ff9d3d, #ffd08a, #ff9d3d, #ff6b00) !important;
+  background-size: 200% 100% !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar-thumb {
+  background: #ff6b00 !important;
+}
+::-webkit-scrollbar-track {
+  background: #0c1014 !important;
+}
+
+/* Header + promotion bar */
+#promotionBar {
+  background: rgba(9,11,14,.96) !important;
+  color: #9ba3ad !important;
+  border-bottom: 1px solid #252c34 !important;
+}
+#promotionBar a {
+  color: #ff9a4d !important;
+  border-color: rgba(255,107,0,.28) !important;
+  background: rgba(255,107,0,.07) !important;
+}
+#siteHeader {
+  background: rgba(9,11,14,.94) !important;
+  border-bottom: 1px solid #252c34 !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,.34) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+/* Brand */
+.brand-badge {
+  background: linear-gradient(135deg, rgba(255,107,0,.15), rgba(255,176,0,.06)) !important;
+  border-color: rgba(255,107,0,.30) !important;
+}
+.brand-icon {
+  background: linear-gradient(135deg, #ff6b00, #ff9d3d) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 6px 18px rgba(255,107,0,.18) !important;
+}
+
+/* Search */
+#headerSearch {
+  background: #11161b !important;
+  border-color: #2a3139 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 6px 18px rgba(0,0,0,.22) !important;
+}
+#headerSearch:focus-within {
+  border-color: rgba(255,107,0,.70) !important;
+  box-shadow: 0 0 0 3px rgba(255,107,0,.10), 0 8px 24px rgba(0,0,0,.24) !important;
+}
+#headerSearch input {
+  color: #fff !important;
+}
+#headerSearch button {
+  background: linear-gradient(135deg, #ff6b00, #ff8a33) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 16px rgba(255,107,0,.24) !important;
+}
+
+/* Header buttons */
+#headerRight > button,
+#authButtons button {
+  border-color: #2a3139 !important;
+  color: #c7cdd4 !important;
+  background: #101419 !important;
+}
+#headerRight > button:hover,
+#authButtons button:hover {
+  border-color: rgba(255,107,0,.55) !important;
+  color: #fff !important;
+  background: #161c22 !important;
+}
+#premiumBtn {
+  background: linear-gradient(135deg, #ff7a00, #e95700) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 20px rgba(255,107,0,.22) !important;
+}
+#headerApkBtn {
+  color: #ff9a4d !important;
+  border-color: rgba(255,107,0,.42) !important;
+  background: rgba(255,107,0,.05) !important;
+}
+#headerUploadBtn {
+  background: linear-gradient(135deg, #ff6b00, #ff9a3d) !important;
+  box-shadow: 0 7px 20px rgba(255,107,0,.22) !important;
+}
+#authButtons button {
+  color: #ff9a4d !important;
+  border-color: rgba(255,107,0,.48) !important;
+}
+
+/* Cards */
+.song-card {
+  background: linear-gradient(180deg, #151a20 0%, #12171c 100%) !important;
+  border-color: #252c34 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.20) !important;
+}
+.song-card:hover {
+  border-color: rgba(255,107,0,.55) !important;
+  box-shadow: 0 16px 34px rgba(0,0,0,.30), 0 0 0 1px rgba(255,107,0,.08) !important;
+}
+.song-card.playing {
+  outline-color: #ff6b00 !important;
+}
+.song-title {
+  color: #f7f8fa !important;
+}
+.artist-name,
+.card-artist {
+  color: #9ba3ad !important;
+}
+
+/* Artwork treatment */
+.image-wrapper {
+  background: #0e1216 !important;
+}
+.song-card:hover .image-wrapper img {
+  filter: saturate(1.05) contrast(1.03) !important;
+}
+
+/* Genre badges: coordinated warm palette */
+.song-card[data-genre] {
+  border-color: #252c34 !important;
+}
+.song-card[data-genre="Dancehall"] .sc-genre,
+.song-card[data-genre="Afrobeat"] .sc-genre,
+.song-card[data-genre="Gospel"] .sc-genre,
+.song-card[data-genre="Kadongo Kamu"] .sc-genre,
+.song-card[data-genre="Reggae"] .sc-genre,
+.song-card[data-genre="Hip Hop"] .sc-genre,
+.song-card[data-genre="R&B"] .sc-genre {
+  background: rgba(15,18,22,.82) !important;
+  color: #ffad66 !important;
+  border: 1px solid rgba(255,107,0,.30) !important;
+  backdrop-filter: blur(8px) !important;
+}
+.sc-genre {
+  background: rgba(15,18,22,.82) !important;
+  color: #ffad66 !important;
+  border: 1px solid rgba(255,107,0,.30) !important;
+}
+
+/* Play / download / share buttons */
+.sc-play-overlay {
+  background: linear-gradient(135deg, #ff6b00, #ff9a3d) !important;
+  box-shadow: 0 6px 18px rgba(255,107,0,.38) !important;
+}
+.song-card.playing .sc-play-overlay {
+  background: #22c55e !important;
+}
+.ca-btn {
+  background: #101419 !important;
+}
+.ca-play {
+  color: #ff8a33 !important;
+  border-color: rgba(255,107,0,.40) !important;
+}
+.ca-dl {
+  color: #ffb366 !important;
+  border-color: rgba(255,176,0,.34) !important;
+}
+.ca-share {
+  color: #c3cbd3 !important;
+  border-color: #303841 !important;
+}
+.ca-play:hover,
+.ca-dl:hover,
+.ca-share:hover {
+  color: #fff !important;
+  background: #181e24 !important;
+  border-color: rgba(255,107,0,.70) !important;
+}
+.sc-like.liked {
+  color: #ff5a67 !important;
+}
+.sc-eq span {
+  background: #ff8a33 !important;
+}
+
+/* List view */
+.song-row {
+  background: #12171c !important;
+  border-bottom-color: #252c34 !important;
+}
+.song-row:hover {
+  background: rgba(255,107,0,.055) !important;
+}
+.song-row.playing {
+  border-left-color: #ff6b00 !important;
+}
+
+/* Forms */
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: #0e1317 !important;
+  border-color: #2a3139 !important;
+  color: #f5f7fa !important;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #ff6b00 !important;
+  box-shadow: 0 0 0 3px rgba(255,107,0,.10) !important;
+}
+.drop-zone {
+  background: #0e1317 !important;
+  border-color: #303841 !important;
+}
+.drop-zone:hover {
+  border-color: #ff6b00 !important;
+  background: rgba(255,107,0,.055) !important;
+}
+
+/* Toast */
+#toast {
+  background: #151a20 !important;
+  border-left-color: #ff6b00 !important;
+  color: #f5f7fa !important;
+}
+
+/* Audio player */
+#audioPlayer {
+  background: rgba(12,16,20,.97) !important;
+  border-top-color: #ff6b00 !important;
+  box-shadow: 0 -14px 38px rgba(0,0,0,.48) !important;
+}
+#progressFill {
+  background: linear-gradient(90deg, #ff6b00, #ffb000) !important;
+}
+#volumeBar {
+  accent-color: #ff6b00 !important;
+}
+#playerArtist {
+  color: #ff9a4d !important;
+}
+
+/* Skeletons */
+.skeleton-card {
+  background: #12171c !important;
+}
+.skeleton-card::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.055) 50%, transparent 100%) !important;
+}
+.skeleton-row {
+  background: linear-gradient(90deg, #252c34 25%, #303841 50%, #252c34 75%) !important;
+}
+
+/* Splash screen — same behavior, new visual style */
+#splashScreen {
+  background: radial-gradient(circle at 50% 35%, rgba(255,107,0,.14), transparent 35%),
+              linear-gradient(135deg, #07090b 0%, #0c1014 52%, #11161b 100%) !important;
+}
+#splashLogo {
+  background: linear-gradient(135deg, #ff6b00, #ff9d3d) !important;
+  box-shadow: 0 0 60px rgba(255,107,0,.42) !important;
+}
+#splashText {
+  color: rgba(255,255,255,.48) !important;
+}
+#splashProgress {
+  background: linear-gradient(90deg, #ff6b00, #ffb000) !important;
+}
+#splashScreen [style*="background:linear-gradient(180deg,#a855f7,#6366f1)"],
+#splashScreen [style*="background:linear-gradient(180deg,#ec4899,#a855f7)"] {
+  background: linear-gradient(180deg, #ff6b00, #ffb000) !important;
+}
+
+/* Mobile navigation */
+#mobileNav {
+  background: rgba(10,13,17,.98) !important;
+  border-top-color: #252c34 !important;
+}
+.mob-nav-btn {
+  color: #8f98a2 !important;
+}
+.mob-nav-btn.active {
+  color: #ff8a33 !important;
+}
+.mob-nav-btn.active::after {
+  background: #ff6b00 !important;
+}
+
+/* Light mode remains functional, but gets a clean warm-neutral palette */
+body.light {
+  --bg: #f4f5f6 !important;
+  --bg-secondary: #ffffff !important;
+  --card: #ffffff !important;
+  --text: #15181c !important;
+  --muted: #66707a !important;
+  --border: #dfe3e7 !important;
+  --nav: #ffffff !important;
+  --deep: #f7f8f9 !important;
+  background: #f4f5f6 !important;
+  color: #15181c !important;
+}
+body.light #siteHeader,
+body.light #promotionBar {
+  background: rgba(255,255,255,.94) !important;
+  border-color: #e1e5e9 !important;
+}
+body.light #headerSearch,
+body.light .form-group input,
+body.light .form-group select,
+body.light .form-group textarea,
+body.light .drop-zone {
+  background: #f7f8f9 !important;
+  border-color: #d9dee3 !important;
+}
+body.light .song-card,
+body.light .song-row {
+  background: #fff !important;
+  border-color: #e0e4e8 !important;
+  box-shadow: 0 7px 22px rgba(25,30,35,.07) !important;
+}
+body.light .song-title {
+  color: #171a1e !important;
+}
+body.light .artist-name,
+body.light .card-artist {
+  color: #66707a !important;
+}
+
+/* Small visual polish without changing layout or behavior */
+button, .song-card, .song-row, input, select, textarea {
+  transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease, color .2s ease !important;
+}
+</style>
+
+<style id="djmusta-button-redesign">
+/* DJMUSTA.COM — refined Play / Download / Share controls
+   Visual-only override: existing HTML, IDs, classes and JavaScript are preserved. */
+
+.music-card .card-actions,
+.song-card .card-actions,
+.track-actions,
+.song-actions,
+.music-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+/* Common action-button base */
+.music-card .card-actions button,
+.song-card .card-actions button,
+.track-actions button,
+.song-actions button,
+.music-actions button {
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    border-radius: 14px !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease !important;
+}
+
+/* Play — orange, primary action */
+.music-card .card-actions button:first-child,
+.song-card .card-actions button:first-child,
+.track-actions button:first-child,
+.song-actions button:first-child,
+.music-actions button:first-child {
+    background: linear-gradient(145deg, #ff8a00, #ed6500) !important;
+    color: #fff !important;
+    border-color: rgba(255,138,0,.75) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 5px 18px rgba(255,106,0,.18) !important;
+}
+
+/* Download — dark green accent */
+.music-card .card-actions button:nth-child(2),
+.song-card .card-actions button:nth-child(2),
+.track-actions button:nth-child(2),
+.song-actions button:nth-child(2),
+.music-actions button:nth-child(2) {
+    background: linear-gradient(145deg, #173d34, #102c27) !important;
+    color: #19e6a0 !important;
+    border-color: rgba(25,230,160,.20) !important;
+}
+
+/* Share — clean charcoal */
+.music-card .card-actions button:nth-child(3),
+.song-card .card-actions button:nth-child(3),
+.track-actions button:nth-child(3),
+.song-actions button:nth-child(3),
+.music-actions button:nth-child(3) {
+    background: linear-gradient(145deg, #292d32, #202429) !important;
+    color: #f4f6f8 !important;
+    border-color: rgba(255,255,255,.07) !important;
+}
+
+/* Hover / active states */
+.music-card .card-actions button:hover,
+.song-card .card-actions button:hover,
+.track-actions button:hover,
+.song-actions button:hover,
+.music-actions button:hover {
+    transform: translateY(-2px) scale(1.04) !important;
+}
+
+.music-card .card-actions button:first-child:hover,
+.song-card .card-actions button:first-child:hover,
+.track-actions button:first-child:hover,
+.song-actions button:first-child:hover,
+.music-actions button:first-child:hover {
+    box-shadow: 0 8px 24px rgba(255,106,0,.30) !important;
+    border-color: #ff8a00 !important;
+}
+
+.music-card .card-actions button:nth-child(2):hover,
+.song-card .card-actions button:nth-child(2):hover,
+.track-actions button:nth-child(2):hover,
+.song-actions button:nth-child(2):hover,
+.music-actions button:nth-child(2):hover {
+    background: linear-gradient(145deg, #1c5144, #14382f) !important;
+    border-color: rgba(25,230,160,.45) !important;
+    box-shadow: 0 7px 20px rgba(25,230,160,.10) !important;
+}
+
+.music-card .card-actions button:nth-child(3):hover,
+.song-card .card-actions button:nth-child(3):hover,
+.track-actions button:nth-child(3):hover,
+.song-actions button:nth-child(3):hover,
+.music-actions button:nth-child(3):hover {
+    background: linear-gradient(145deg, #343940, #292e34) !important;
+    border-color: rgba(255,255,255,.18) !important;
+}
+
+/* Keep icons crisp and centered */
+.music-card .card-actions button i,
+.song-card .card-actions button i,
+.track-actions button i,
+.song-actions button i,
+.music-actions button i {
+    font-size: 18px !important;
+    line-height: 1 !important;
+}
+
+/* Mobile sizing */
+@media (max-width: 600px) {
+    .music-card .card-actions button,
+    .song-card .card-actions button,
+    .track-actions button,
+    .song-actions button,
+    .music-actions button {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        border-radius: 12px !important;
+    }
+
+    .music-card .card-actions button:first-child,
+    .song-card .card-actions button:first-child,
+    .track-actions button:first-child,
+    .song-actions button:first-child,
+    .music-actions button:first-child {
+        border-radius: 50% !important;
+    }
+}
+</style>
+
 </head>
 <body>
 
@@ -2947,9 +3468,9 @@
                 <div class="song-title" itemprop="name">${esc(s.title)}</div>
                 <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(formatArtistNames(s.artist))}</span>${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</div>
                 <div class="card-actions-row">
-                  <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play">▶</button>
+                  <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play">▶ Play</button>
                   <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
-                  <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share">🔗</button>
+                  <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share">↗</button>
                 </div>
               </div>
             </div>`;
@@ -4077,9 +4598,9 @@
             <div class="song-title" itemprop="name">${esc(s.title)}</div>
             <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(s.artist)}</span></div>
             <div class="card-actions-row">
-              <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
+              <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})">▶ Play</button>
               <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
-              <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share">🔗</button>
+              <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share">↗</button>
             </div>
           </div>
         </div>`).join('');
