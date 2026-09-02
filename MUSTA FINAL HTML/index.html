@@ -1903,8 +1903,8 @@ button, .song-card, .song-row, input, select, textarea {
    Keeps desktop design intact and preserves all existing JS.
    ============================================================ */
 @media (max-width: 767px) {
-  html, body { width:100%; max-width:100%; overflow-x:hidden !important; }
-  body { padding-bottom:132px !important; }
+  html { width:100%; max-width:100%; overflow-x:hidden; }
+  body { width:100%; max-width:100%; overflow-x:visible !important; padding-bottom:132px !important; }
 
   /* Compact mobile promotion bar */
   #promotionBar { min-height:30px !important; padding:5px 8px !important; font-size:9px !important; gap:5px !important; }
