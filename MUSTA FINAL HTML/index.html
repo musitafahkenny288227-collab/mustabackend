@@ -235,6 +235,11 @@
     #audioPlayer { min-height: 0; }
     /* Song cards keep aspect ratio */
     .image-wrapper, .card-img-wrap { aspect-ratio: 1/1; overflow: hidden; }
+    /* Reserve space for hero so carousel load doesn't cause CLS */
+    .hero-section { height: 240px !important; min-height: 240px !important; }
+    @media (max-width: 768px) { .hero-section { height: 180px !important; min-height: 180px !important; } }
+    /* Reserve space for Song of Day so it doesn't push content when it appears */
+    #songOfDayWrap { min-height: 0; contain: layout; }
     /* Skeleton cards keep size */
     .skeleton-card { aspect-ratio: 1/1; }
     /* Hero carousel images — reserve height to prevent CLS */
@@ -1614,7 +1619,7 @@
   <div id="musicSections" style="max-width:1240px;margin:20px auto;padding:0 14px">
 
     <!-- ===== SONG OF THE DAY ===== -->
-    <div id="songOfDayWrap" style="margin-bottom:28px;display:none">
+    <div id="songOfDayWrap" style="margin-bottom:28px;display:none;contain:layout style">
       <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(168,85,247,.12));border:1px solid rgba(245,158,11,.3);border-radius:16px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;cursor:pointer" onclick="playSong(window._songOfDayId)" id="songOfDayCard">
         <div style="position:relative;flex-shrink:0">
           <img id="songOfDayCover" src="" alt="Song of the Day cover" style="width:80px;height:80px;border-radius:12px;object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,.4)" onerror="this.src='${DEFAULT_COVER}'"/>
