@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * DJ MUSTA — Cloudflare Worker for SEO Song Pre-rendering
  * Deploy this in: Cloudflare Dashboard → Workers & Pages → Workers
@@ -97,8 +97,11 @@ async function handleArtistRoute(path, url) {
   try {
     console.log(`[Worker] Handling /artist/${artistName}`);
     
-    // Fetch all songs by this artist
-    const songs = await fetchSongsByArtist(artistName);
+    // Fetch songs and profile in parallel
+    const [songs, profileData] = await Promise.all([
+      fetchSongsByArtist(artistName),
+      fetchArtistProfile(artistName)
+    ]);
 
     if (!songs || songs.length === 0) {
       console.log(`[Worker] No songs found for artist: ${artistName}`);
@@ -106,11 +109,28 @@ async function handleArtistRoute(path, url) {
     }
 
     console.log(`[Worker] Found ${songs.length} songs for ${artistName}`);
-    return serveArtistPage(artistName, songs, url);
+    return serveArtistPage(artistName, songs, url, profileData);
 
   } catch (err) {
     console.error('[Worker] Artist route error:', err);
     return Response.redirect(SITE_URL, 302);
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// FETCH ARTIST PROFILE (bio, photo, social links)
+// ────────────────────────────────────────────────────────────
+async function fetchArtistProfile(artistName) {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/artists/${encodeURIComponent(artistName)}`,
+      { headers: { 'User-Agent': 'DJMusta-SEO-Bot/1.0' }, signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.artist || null;
+  } catch (e) {
+    return null;
   }
 }
 
@@ -151,7 +171,7 @@ async function fetchSongsByArtist(artistName) {
 // ────────────────────────────────────────────────────────────
 // SERVE ARTIST PROFILE PAGE
 // ────────────────────────────────────────────────────────────
-function serveArtistPage(artistName, songs, requestUrl) {
+function serveArtistPage(artistName, songs, requestUrl, profile) {
   const artistSlug = createSlug(artistName);
   const artistUrl = `${SITE_URL}/artist/${artistSlug}`;
   
@@ -159,15 +179,30 @@ function serveArtistPage(artistName, songs, requestUrl) {
   const genres = [...new Set(songs.map(s => s.genre).filter(Boolean))].slice(0, 3);
   const genreText = genres.length > 0 ? genres.join(', ') : 'Ugandan Music';
   
-  // Use first song's cover if available, or artist's cover — proxy through weserv.nl
-  const coverDirect = songs.find(s => s.cover_image || s.cover_path)
-    ? (songs[0].cover_image || songs[0].cover_path).startsWith('http')
-      ? (songs[0].cover_image || songs[0].cover_path)
-      : `${API_BASE}${songs[0].cover_image || songs[0].cover_path}`
-    : DEFAULT_IMG;
-  const coverUrl = coverDirect !== DEFAULT_IMG
-    ? `https://images.weserv.nl/?url=${encodeURIComponent(coverDirect)}&w=1200&h=630&fit=cover&output=jpg&q=85`
-    : DEFAULT_IMG;
+  // Use profile photo if available, else first song cover
+  const profilePhoto = profile?.photo_url || null;
+  const coverDirect = profilePhoto
+    ? (profilePhoto.startsWith('data:') ? profilePhoto : profilePhoto.startsWith('http') ? profilePhoto : `${API_BASE}${profilePhoto}`)
+    : songs.find(s => s.cover_image || s.cover_path)
+      ? ((songs[0].cover_image || songs[0].cover_path).startsWith('http')
+          ? (songs[0].cover_image || songs[0].cover_path)
+          : `${API_BASE}${songs[0].cover_image || songs[0].cover_path}`)
+      : DEFAULT_IMG;
+
+  const ogCoverUrl = (profilePhoto && profilePhoto.startsWith('data:'))
+    ? DEFAULT_IMG  // can't use base64 in OG
+    : coverDirect !== DEFAULT_IMG
+      ? `https://images.weserv.nl/?url=${encodeURIComponent(coverDirect)}&w=1200&h=630&fit=cover&output=jpg&q=85`
+      : DEFAULT_IMG;
+
+  const avatarUrl = profilePhoto
+    ? (profilePhoto.startsWith('data:') ? profilePhoto : `https://images.weserv.nl/?url=${encodeURIComponent(coverDirect)}&w=400&h=400&fit=cover&output=jpg&q=85`)
+    : null;
+
+  const bio = profile?.bio || '';
+  const instagram = profile?.instagram || '';
+  const twitter = profile?.twitter || '';
+  const facebook = profile?.facebook || '';
 
   const totalStreams = songs.reduce((sum, s) => sum + (Number(s.play_count) || 0), 0);
   const pageTitle = `${artistName} Songs | Free Music Stream & Download | ${SITE_NAME}`;
@@ -181,7 +216,7 @@ function serveArtistPage(artistName, songs, requestUrl) {
     'name': artistName,
     'url': artistUrl,
     'description': description,
-    'image': coverUrl,
+    'image': ogCoverUrl,
     'genre': genres.length > 0 ? genres : ['Ugandan Music'],
     'publisher': {
       '@type': 'Organization',
@@ -232,7 +267,7 @@ function serveArtistPage(artistName, songs, requestUrl) {
 <meta property="og:type" content="music.musician">
 <meta property="og:title" content="${escHtml(pageTitle)}">
 <meta property="og:description" content="${escHtml(description)}">
-<meta property="og:image" content="${escHtml(coverUrl)}">
+<meta property="og:image" content="${escHtml(ogCoverUrl)}">
 <meta property="og:url" content="${artistUrl}">
 <meta property="og:site_name" content="${SITE_NAME}">
 
@@ -240,7 +275,7 @@ function serveArtistPage(artistName, songs, requestUrl) {
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escHtml(pageTitle)}">
 <meta name="twitter:description" content="${escHtml(description)}">
-<meta name="twitter:image" content="${escHtml(coverUrl)}">
+<meta name="twitter:image" content="${escHtml(ogCoverUrl)}">
 
 <!-- Favicons -->
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -271,8 +306,12 @@ function serveArtistPage(artistName, songs, requestUrl) {
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0F172A;color:#F1F5F9;padding:20px}
   .container{max-width:1000px;margin:0 auto}
   .header{text-align:center;margin-bottom:40px;padding-top:20px}
-  .cover{width:200px;height:200px;border-radius:14px;object-fit:cover;margin:0 auto 20px;box-shadow:0 8px 30px rgba(0,0,0,.4)}
-  .artist-name{font-size:36px;font-weight:800;margin-bottom:10px;background:linear-gradient(135deg,#a855f7,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .cover{width:200px;height:200px;border-radius:50%;object-fit:cover;margin:0 auto 20px;box-shadow:0 8px 30px rgba(0,0,0,.4);border:4px solid rgba(168,85,247,.4)}
+  .cover-placeholder{width:200px;height:200px;border-radius:50%;margin:0 auto 20px;background:linear-gradient(135deg,#a855f7,#6c63ff);display:flex;align-items:center;justify-content:center;font-size:80px;font-weight:900;color:white;border:4px solid rgba(168,85,247,.4)}
+  .artist-name{font-size:36px;font-weight:800;margin-bottom:6px;background:linear-gradient(135deg,#a855f7,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .artist-bio{font-size:14px;color:#94A3B8;margin:0 auto 16px;max-width:500px;line-height:1.6}
+  .social-links{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+  .social-btn{padding:6px 14px;border-radius:50px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
   .info{display:flex;gap:20px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
   .info-item{text-align:center}
   .info-label{font-size:12px;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px}
@@ -294,12 +333,23 @@ function serveArtistPage(artistName, songs, requestUrl) {
 
 <div class="container">
   <div class="header">
-    <img class="cover" src="${escHtml(coverUrl)}" alt="${escHtml(artistName)}" onerror="this.style.display='none'">
+    ${avatarUrl
+      ? `<img class="cover" src="${escHtml(avatarUrl)}" alt="${escHtml(artistName)}" onerror="this.style.display='none';document.getElementById('artistInitial').style.display='flex'">`
+      : ''}
+    <div class="cover-placeholder" id="artistInitial" style="display:${avatarUrl ? 'none' : 'flex'}">${escHtml(artistName.charAt(0).toUpperCase())}</div>
     <h1 class="artist-name">${escHtml(artistName)}</h1>
-    
+    ${bio ? `<p class="artist-bio">${escHtml(bio)}</p>` : ''}
+
     <div class="genres">
       ${genres.map(g => `<span class="genre-tag">${escHtml(g)}</span>`).join('')}
     </div>
+
+    ${(instagram || twitter || facebook) ? `
+    <div class="social-links">
+      ${instagram ? `<a class="social-btn" href="${instagram.startsWith('http') ? escHtml(instagram) : 'https://instagram.com/' + escHtml(instagram)}" target="_blank" rel="noopener" style="background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);color:white">📷 Instagram</a>` : ''}
+      ${twitter ? `<a class="social-btn" href="${twitter.startsWith('http') ? escHtml(twitter) : 'https://twitter.com/' + escHtml(twitter)}" target="_blank" rel="noopener" style="background:#000;color:white">𝕏 Twitter</a>` : ''}
+      ${facebook ? `<a class="social-btn" href="${facebook.startsWith('http') ? escHtml(facebook) : 'https://facebook.com/' + escHtml(facebook)}" target="_blank" rel="noopener" style="background:#1877f2;color:white">📘 Facebook</a>` : ''}
+    </div>` : ''}
 
     <div class="info">
       <div class="info-item">
@@ -312,7 +362,7 @@ function serveArtistPage(artistName, songs, requestUrl) {
       </div>
     </div>
 
-    <a href="/?search=${encodeURIComponent(artistName)}" class="browse-btn">Browse All Songs</a>
+    <a href="/?search=${encodeURIComponent(artistName)}" class="browse-btn">▶ Browse All Songs on DJ Musta</a>
   </div>
 
   <div class="table-section">

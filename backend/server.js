@@ -540,6 +540,10 @@ async function initDB() {
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_since TIMESTAMPTZ');
         await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_note TEXT');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_song_of_day BOOLEAN DEFAULT FALSE');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsored_until TIMESTAMPTZ');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsor_name TEXT DEFAULT \'\'');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_image TEXT');
         console.log('✅ User columns updated');
     } catch(e) {
         console.log('⚠️ Column update skipped');
@@ -1099,7 +1103,34 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
     }
 
     // â”€â”€ GET /api/songs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (method === 'GET' && pathname === '/api/songs') {
+    
+    // GET /api/songs/song-of-day
+    if (method === 'GET' && pathname === '/api/songs/song-of-day') {
+        try {
+            let r = await query(
+                `SELECT s.*, COALESCE(vr.status,'none') as uploader_verified
+                 FROM songs s
+                 LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved'
+                 WHERE s.approved=TRUE AND s.is_song_of_day=TRUE
+                 LIMIT 1`
+            );
+            if (!r.rows[0]) {
+                r = await query(
+                    `SELECT s.*, COALESCE(vr.status,'none') as uploader_verified
+                     FROM songs s
+                     LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved'
+                     WHERE s.approved=TRUE
+                     ORDER BY s.play_count DESC
+                     LIMIT 1`
+                );
+            }
+            if (!r.rows[0]) return J(404, { error:'No song of the day' });
+            return J(200, { song: r.rows[0] });
+        } catch(e) {
+            return J(500, { error:'Could not load song of the day' });
+        }
+    }
+if (method === 'GET' && pathname === '/api/songs') {
         const q        = parsed.searchParams;
         const category = q.get('category') || 'all';
         const search   = q.get('search') || '';
@@ -1696,10 +1727,27 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
 
     // â”€â”€ ARTISTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    // GET /api/artists - Get all artists
+    // GET /api/artists - Get all artists with photo, bio, song count
     if (method === 'GET' && pathname === '/api/artists') {
-        const artists = await query('SELECT DISTINCT artist FROM songs WHERE approved=TRUE ORDER BY artist');
-        return J(200, { artists: artists.rows.map(r => r.artist) });
+        const artists = await query(`
+            SELECT
+                s.artist AS name,
+                COUNT(s.id)::int AS song_count,
+                MAX(s.play_count) AS top_plays,
+                a.photo_url,
+                a.bio,
+                a.instagram,
+                a.twitter,
+                a.facebook,
+                bool_or(vr.status = 'approved') AS is_verified
+            FROM songs s
+            LEFT JOIN artists a ON LOWER(a.name) = LOWER(s.artist)
+            LEFT JOIN verification_requests vr ON vr.artist_name = s.artist AND vr.status = 'approved'
+            WHERE s.approved = TRUE
+            GROUP BY s.artist, a.photo_url, a.bio, a.instagram, a.twitter, a.facebook
+            ORDER BY song_count DESC, s.artist
+        `);
+        return J(200, { artists: artists.rows });
     }
 
     // GET /api/artists/:name - Get artist profile and songs
