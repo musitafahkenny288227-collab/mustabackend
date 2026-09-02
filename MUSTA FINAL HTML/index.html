@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1587,7 +1587,7 @@
     <div id="songOfDayWrap" style="margin-bottom:28px;display:none">
       <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(168,85,247,.12));border:1px solid rgba(245,158,11,.3);border-radius:16px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;cursor:pointer" onclick="playSong(window._songOfDayId)" id="songOfDayCard">
         <div style="position:relative;flex-shrink:0">
-          <img id="songOfDayCover" src="" style="width:80px;height:80px;border-radius:12px;object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,.4)" onerror="this.src='${DEFAULT_COVER}'"/>
+          <img id="songOfDayCover" src="" alt="Song of the Day cover" style="width:80px;height:80px;border-radius:12px;object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,.4)" onerror="this.src='${DEFAULT_COVER}'"/>
           <div style="position:absolute;top:-8px;left:-8px;background:linear-gradient(135deg,#f59e0b,#f97316);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(245,158,11,.5)">☀️</div>
         </div>
         <div style="flex:1;min-width:0">
@@ -2687,7 +2687,7 @@
         const avatar = document.getElementById('userAvatar');
         const photo = getProfilePhoto(currentUser);
         if (photo) {
-          avatar.innerHTML = `<img src="${imgSrc(photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none';this.parentElement.textContent='${(currentUser.username||'U').charAt(0).toUpperCase()}'"/>`;
+          avatar.innerHTML = `<img src="${imgSrc(photo)}" alt="${currentUser.username || 'User'} profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none';this.parentElement.textContent='${(currentUser.username||'U').charAt(0).toUpperCase()}'"/>`;
         } else {
           avatar.textContent = (currentUser.username || 'U').charAt(0).toUpperCase();
         }
@@ -2881,7 +2881,7 @@
         songsGrid.innerHTML += list.map((s, i) => `
           <div class="song-row${playIndex === songs.indexOf(s) && audio.src ? ' playing' : ''}" id="row-${s.id}">
             <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${songs.indexOf(s) + 1}</div>
-            <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)} by ${esc(s.artist)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="playSong(${s.id})">${esc(s.title)}</div>
               <div style="font-size:12px;color:var(--muted)">${esc(formatArtistNames(s.artist))}</div>
@@ -3586,7 +3586,7 @@
       el.innerHTML = h.map((s, i) => `
         <div class="song-row">
           <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${i + 1}</div>
-          <img src="${imgSrc(s.cover)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+          <img src="${imgSrc(s.cover)}" alt="${esc(s.title || 'Song')}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
             <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
@@ -3635,7 +3635,7 @@
         c.innerHTML = d.songs.map((s, i) => `
           <div class="song-row" id="prow-${s.id}">
             <div style="font-weight:800;color:var(--pink);font-size:15px;width:28px;text-align:center;flex-shrink:0">${i + 1}</div>
-            <img src="${imgSrc(s.cover_path)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <img src="${imgSrc(s.cover_path)}" alt="${esc(s.title)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14px" onclick="playSong(${s.id})">${esc(s.title)}</div>
               <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
@@ -3811,7 +3811,7 @@
         g.innerHTML = songs.length ? songs.map(s => `
           <div class="song-card" onclick="playSong(${s.id})">
             <div class="image-wrapper">
-              <img src="${imgSrc(s.cover_path || s.cover_image)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+              <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
             </div>
             <div class="card-details">
@@ -3853,7 +3853,7 @@
       grid.innerHTML = songs.map(s => `
         <div class="song-card" onclick="playSong(${s.id})">
           <div class="image-wrapper">
-            <img src="${imgSrc(s.cover_path || s.cover_image)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)} by ${esc(s.artist)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             ${s.genre ? `<span class="sc-genre">${esc(s.genre)}</span>` : ''}
             <button class="sc-like${s.liked ? ' liked' : ''}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like">♥</button>
             <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
@@ -3917,7 +3917,7 @@
           list.innerHTML = top10.songs.map((s, i) => `
             <div onclick="playSong(${s.id})" style="display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:10px 14px;border:1px solid ${i < 3 ? ['#F59E0B','#94A3B8','#CD7C2F'][i] + '33' : 'var(--border)'};cursor:pointer;transition:all .2s">
               <div style="min-width:34px;height:34px;border-radius:8px;background:${i < 3 ? ['#F59E0B','#94A3B8','#CD7C2F'][i] : 'var(--border)'};display:flex;align-items:center;justify-content:center;font-size:${i < 3 ? '18px' : '14px'};font-weight:900;color:white;flex-shrink:0">${i < 3 ? rankIcons[i] : i + 1}</div>
-              <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+              <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <div style="flex:1;min-width:0">
                 <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
                 <div style="font-size:11px;color:var(--muted)">${esc(s.artist)} · ▶ ${(s.play_count || 0).toLocaleString()} plays</div>
@@ -3962,7 +3962,7 @@
         g.innerHTML = songs.map((s, i) => `
           <div style="background:var(--card);border-radius:12px;padding:16px;text-align:center">
             <div style="font-size:28px;font-weight:900;color:${i < 3 ? '#f59e0b' : 'var(--muted)'}">${i + 1}</div>
-            <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin:8px 0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)} by ${esc(s.artist)}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin:8px 0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
             <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
             <div style="font-size:11px;color:var(--pink);margin-top:4px">▶ ${s.play_count || 0}</div>
@@ -4080,7 +4080,9 @@
                      allSongs.sort((a, b) => (b.play_count || 0) - (a.play_count || 0))[0];
         if (!sotd) return;
         window._songOfDayId = sotd.id;
-        document.getElementById('songOfDayCover').src = imgSrc(sotd.cover_path || sotd.cover_image);
+        const sotdImg = document.getElementById('songOfDayCover');
+        sotdImg.src = imgSrc(sotd.cover_path || sotd.cover_image);
+        sotdImg.alt = sotd.title + ' by ' + sotd.artist;
         document.getElementById('songOfDayTitle').textContent = sotd.title;
         document.getElementById('songOfDayArtist').textContent = 'by ' + formatArtistNames(sotd.artist);
         document.getElementById('songOfDayWrap').style.display = 'block';
@@ -4098,7 +4100,7 @@
       grid.innerHTML = history.slice(0, 10).map(s => `
         <div class="song-card" onclick="playSong(${s.id})">
           <div class="image-wrapper">
-            <img src="${imgSrc(s.cover)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <img src="${imgSrc(s.cover)}" alt="${esc(s.title || 'Song')}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
           </div>
           <div class="card-details">
@@ -4435,7 +4437,7 @@
           }
           c.innerHTML = liked.map(s => `
             <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;cursor:pointer" onclick="playSong(${s.id})">
-              <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+              <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <div style="flex:1;min-width:0">
                 <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
                 <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
@@ -4550,7 +4552,7 @@
           }
           c.innerHTML = list.map(s => `
             <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px">
-              <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+              <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <div style="flex:1;min-width:0">
                 <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
                 <div style="font-size:12px;color:var(--muted)">${esc(s.artist)} • ${esc(s.uploader_name || 'unknown')}</div>
@@ -4566,7 +4568,7 @@
           document.getElementById('adminApprovedCount').textContent = list.length;
           c.innerHTML = list.map(s => `
             <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:10px;margin-bottom:6px;flex-wrap:wrap">
-              <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+              <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <div style="flex:1;min-width:0">
                 <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
                   ${esc(s.title)}
@@ -4632,7 +4634,7 @@
               <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--pink)">⭐ Currently Featured (${featured.length})</div>
               ${featured.map(s => `
                 <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">
-                  <img src="${imgSrc(s.cover_path)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+                  <img src="${imgSrc(s.cover_path)}" alt="${esc(s.title)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
                   <div style="flex:1;min-width:0;font-size:13px;font-weight:600">${esc(s.title)}</div>
                   <button onclick="adminToggleFeatured(${s.id},true)" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Remove</button>
                 </div>`).join('')}
@@ -4640,7 +4642,7 @@
               <div style="font-size:14px;font-weight:700;margin:16px 0 12px;color:var(--muted)">Add to Featured:</div>
               ${notFeatured.map(s => `
                 <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">
-                  <img src="${imgSrc(s.cover_path)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+                  <img src="${imgSrc(s.cover_path)}" alt="${esc(s.title)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
                   <div style="flex:1;min-width:0;font-size:13px;font-weight:600">${esc(s.title)}<span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(s.artist)}</span></div>
                   <button onclick="adminToggleFeatured(${s.id},false)" style="background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">⭐ Feature</button>
                 </div>`).join('')}`;
@@ -4845,7 +4847,7 @@
       }
       c.innerHTML = results.map(s => `
         <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px">
-          <img src="${imgSrc(s.cover_path || s.cover_image)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+          <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:14px">${esc(s.title)}</div>
             <div style="font-size:12px;color:var(--muted)">${esc(s.artist)}</div>
