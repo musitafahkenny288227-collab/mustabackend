@@ -3876,6 +3876,136 @@
     }
 
     // ============================================================
+    // EDIT ARTIST — photo, bio, social links (admin only)
+    // ============================================================
+    function openEditArtist(name) {
+      // Remove any existing modal
+      const old = document.getElementById('editArtistModal');
+      if (old) old.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'editArtistModal';
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-label', 'Edit Artist Profile');
+      modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+
+      modal.innerHTML = `
+        <div style="background:var(--bg-secondary);border-radius:20px;padding:28px;max-width:480px;width:100%;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <div style="font-size:18px;font-weight:800">✏️ Edit ${esc(name)}</div>
+            <button onclick="document.getElementById('editArtistModal').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+          </div>
+
+          <!-- Photo upload -->
+          <div style="text-align:center;margin-bottom:20px">
+            <div id="editArtistPhotoPreview" style="width:100px;height:100px;border-radius:50%;margin:0 auto 12px;overflow:hidden;background:linear-gradient(135deg,var(--pink),#6c63ff);display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:900;color:white;cursor:pointer;border:3px solid rgba(168,85,247,.4)" onclick="document.getElementById('editArtistPhotoFile').click()">
+              ${esc(name.charAt(0).toUpperCase())}
+            </div>
+            <input type="file" id="editArtistPhotoFile" accept="image/*" style="display:none" onchange="previewArtistPhoto(this,'${esc(name)}')"/>
+            <button onclick="document.getElementById('editArtistPhotoFile').click()" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#c084fc;padding:7px 16px;border-radius:50px;font-size:12px;font-weight:700;cursor:pointer">📷 Upload Photo</button>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">Max 2MB · JPG, PNG, WebP</div>
+          </div>
+
+          <!-- Bio -->
+          <div style="margin-bottom:14px">
+            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Bio</label>
+            <textarea id="editArtistBio" placeholder="Artist bio..." rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical;outline:none"></textarea>
+          </div>
+
+          <!-- Instagram -->
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Instagram</label>
+            <input id="editArtistInstagram" type="text" placeholder="username or full URL" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"/>
+          </div>
+
+          <!-- Twitter -->
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Twitter / X</label>
+            <input id="editArtistTwitter" type="text" placeholder="username or full URL" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"/>
+          </div>
+
+          <!-- Facebook -->
+          <div style="margin-bottom:20px">
+            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Facebook</label>
+            <input id="editArtistFacebook" type="text" placeholder="username or full URL" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"/>
+          </div>
+
+          <div style="display:flex;gap:10px">
+            <button onclick="saveArtistProfile('${esc(name)}')" style="flex:1;background:linear-gradient(135deg,#a855f7,#6366f1);color:white;border:none;padding:12px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;min-height:44px">💾 Save</button>
+            <button onclick="document.getElementById('editArtistModal').remove()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;min-height:44px">Cancel</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(modal);
+
+      // Close on backdrop click
+      modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+      // Pre-load existing values from the API
+      api('/artists/' + encodeURIComponent(name)).then(d => {
+        const a = d.artist || {};
+        if (document.getElementById('editArtistBio')) document.getElementById('editArtistBio').value = a.bio || '';
+        if (document.getElementById('editArtistInstagram')) document.getElementById('editArtistInstagram').value = a.instagram || '';
+        if (document.getElementById('editArtistTwitter')) document.getElementById('editArtistTwitter').value = a.twitter || '';
+        if (document.getElementById('editArtistFacebook')) document.getElementById('editArtistFacebook').value = a.facebook || '';
+        if (a.photo_url) {
+          const preview = document.getElementById('editArtistPhotoPreview');
+          if (preview) preview.innerHTML = `<img src="${imgSrc(a.photo_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'"/>`;
+        }
+      }).catch(() => {});
+    }
+
+    function previewArtistPhoto(input, artistName) {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) { showToast('Photo too large. Max 2MB.', '❌'); return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        const preview = document.getElementById('editArtistPhotoPreview');
+        if (preview) preview.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover"/>`;
+        // Upload immediately
+        uploadArtistPhoto(artistName, file);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function uploadArtistPhoto(artistName, file) {
+      try {
+        showToast('Uploading photo...', '⏳');
+        const fd = new FormData();
+        fd.append('photo', file);
+        fd.append('artistName', artistName);
+        const res = await fetch(API + '/api/artists/photo', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: fd
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Upload failed');
+        showToast('✅ Photo uploaded for ' + artistName, '🎤');
+      } catch (e) { showToast(e.message, '❌'); }
+    }
+
+    async function saveArtistProfile(name) {
+      try {
+        const bio       = document.getElementById('editArtistBio')?.value?.trim() || '';
+        const instagram = document.getElementById('editArtistInstagram')?.value?.trim() || '';
+        const twitter   = document.getElementById('editArtistTwitter')?.value?.trim() || '';
+        const facebook  = document.getElementById('editArtistFacebook')?.value?.trim() || '';
+        showToast('Saving...', '⏳');
+        await api('/artists/' + encodeURIComponent(name), {
+          method: 'PATCH',
+          body: JSON.stringify({ bio, instagram, twitter, facebook })
+        });
+        showToast('✅ Artist profile saved!', '🎤');
+        document.getElementById('editArtistModal')?.remove();
+        // Refresh the artist detail view
+        loadArtistDetail(name);
+      } catch (e) { showToast(e.message, '❌'); }
+    }
+
+    // ============================================================
     // SPECIAL GRIDS
     // ============================================================
     function renderMusicGrid(gridId, songs, badgeId) {
