@@ -879,6 +879,84 @@
       body {
         padding-bottom: 180px;
       }
+
+      /* ── Promotion bar: single line, smaller ── */
+      #promotionBar {
+        padding: 4px 10px !important;
+        font-size: 10px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+        justify-content: flex-start !important;
+        min-height: 30px !important;
+      }
+      #promotionBar::-webkit-scrollbar { display: none !important; }
+      #promotionBar .promotion-label { display: none !important; }
+
+      /* ── Header: compact ── */
+      #siteHeader {
+        padding: 7px 10px !important;
+        gap: 8px !important;
+        min-height: 50px !important;
+      }
+      .brand-badge {
+        padding: 5px 8px !important;
+      }
+      #headerSearch {
+        height: 36px !important;
+        padding: 2px 8px !important;
+      }
+      #headerSearch input {
+        font-size: 12px !important;
+      }
+      #headerSearch button {
+        min-width: 56px !important;
+        font-size: 10px !important;
+        padding: 3px 8px !important;
+      }
+
+      /* ── Hero section: smaller on mobile ── */
+      .hero-section {
+        min-height: 120px !important;
+      }
+      .hero-heading {
+        font-size: 18px !important;
+      }
+      .hero-heading span:first-child {
+        font-size: 22px !important;
+      }
+      .hero-sub {
+        font-size: 10px !important;
+        letter-spacing: 0.5px !important;
+      }
+
+      /* ── Nav tabs: scrollable, smaller ── */
+      nav .nav-btn {
+        padding: 5px 10px !important;
+        font-size: 11px !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* ── A-Z filter: smaller buttons ── */
+      .az-btn {
+        font-size: 11px !important;
+        padding: 4px 8px !important;
+        min-width: 28px !important;
+      }
+
+      /* ── Song of the Day: compact ── */
+      #songOfDayCard {
+        padding: 12px !important;
+        gap: 10px !important;
+      }
+      #songOfDayCover {
+        width: 56px !important;
+        height: 56px !important;
+      }
+      #songOfDayTitle {
+        font-size: 14px !important;
+      }
       #audioPlayer {
         bottom: 56px !important;
         left: 6px !important;
@@ -1621,6 +1699,264 @@ button, .song-card, .song-row, input, select, textarea {
 }
 </style>
 
+
+<style id="djmusta-grid-layout-fix">
+/* ============================================================
+   DJ MUSTA GRID FIX
+   Fixes narrow/stacked song cards while keeping functionality.
+   ============================================================ */
+
+/* Desktop/tablet: cards fill a proper responsive grid */
+#songsGrid.music-grid,
+.music-grid {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+  grid-auto-flow: row !important;
+  grid-template-rows: none !important;
+  align-items: start !important;
+  gap: 16px !important;
+  overflow: visible !important;
+  padding: 4px 0 14px !important;
+}
+
+/* Never let a card collapse to content width */
+.music-grid > .song-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  align-self: start !important;
+}
+
+/* Keep artwork square and fill the card */
+.music-grid > .song-card .image-wrapper {
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  min-width: 0 !important;
+}
+
+.music-grid > .song-card .image-wrapper img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* Keep the three actions on one clean row */
+.music-grid > .song-card .card-actions-row {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  margin-top: auto !important;
+}
+
+/* Prevent action buttons from forcing strange card widths */
+.music-grid > .song-card .ca-btn {
+  flex: 0 0 30px !important;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+}
+
+/* Mobile: two comfortable columns for All Songs */
+@media (max-width: 767px) {
+  #songsGrid.music-grid {
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    padding: 4px 0 12px !important;
+    overflow: visible !important;
+  }
+
+  #songsGrid.music-grid > .song-card {
+    width: 100% !important;
+  }
+
+  .music-grid:not(#songsGrid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    overflow: visible !important;
+  }
+
+  .music-grid > .song-card .card-details {
+    padding: 8px 8px 10px !important;
+    min-width: 0 !important;
+  }
+
+  .music-grid > .song-card .song-title,
+  .music-grid > .song-card .artist-name {
+    max-width: 100% !important;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 400px) {
+  #songsGrid.music-grid,
+  .music-grid:not(#songsGrid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+}
+</style>
+
+
+<style id="djmusta-horizontal-all-songs">
+/* All Songs: horizontal scrolling */
+#songsGrid.music-grid {
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  grid-template-columns:none !important;
+  grid-auto-flow:unset !important;
+  gap:14px !important;
+  padding:4px 4px 16px !important;
+  scroll-behavior:smooth !important;
+  scroll-snap-type:x proximity !important;
+  -webkit-overflow-scrolling:touch !important;
+  scrollbar-width:thin !important;
+}
+#songsGrid.music-grid > .song-card {
+  flex:0 0 190px !important;
+  width:190px !important;
+  min-width:190px !important;
+  scroll-snap-align:start !important;
+}
+#songsGrid.music-grid::-webkit-scrollbar { height:6px !important; }
+#songsGrid.music-grid::-webkit-scrollbar-track { background:#151a20 !important; border-radius:20px !important; }
+#songsGrid.music-grid::-webkit-scrollbar-thumb { background:#ff6b00 !important; border-radius:20px !important; }
+@media (max-width:767px) {
+  #songsGrid.music-grid { gap:10px !important; padding:4px 4px 12px !important; }
+  #songsGrid.music-grid > .song-card { flex:0 0 155px !important; width:155px !important; min-width:155px !important; }
+}
+</style>
+
+<style id="djmusta-modern-upgrade">
+/* ============================================================
+   DJ MUSTA MODERN UPGRADE
+   UI/UX enhancements only — existing API and functions preserved.
+   ============================================================ */
+:root{
+  --dm-orange:#ff6b00;
+  --dm-orange2:#ff9d42;
+  --dm-glass:rgba(255,255,255,.055);
+  --dm-glass2:rgba(255,255,255,.085);
+}
+
+/* Modern horizontal shelves across the discovery page */
+#recentlyPlayedGrid,
+#sponsoredGrid,
+#verifiedArtistsGrid,
+#officialTracksGrid,
+#kadongo-grid,
+#trending-today-grid,
+#top-downloads-grid,
+#relatedSongsGrid{
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  gap:14px !important;
+  padding:4px 4px 16px !important;
+  scroll-behavior:smooth !important;
+  scroll-snap-type:x proximity !important;
+  -webkit-overflow-scrolling:touch !important;
+  scrollbar-width:thin !important;
+}
+#recentlyPlayedGrid::-webkit-scrollbar,
+#sponsoredGrid::-webkit-scrollbar,
+#verifiedArtistsGrid::-webkit-scrollbar,
+#officialTracksGrid::-webkit-scrollbar,
+#kadongo-grid::-webkit-scrollbar,
+#trending-today-grid::-webkit-scrollbar,
+#top-downloads-grid::-webkit-scrollbar,
+#relatedSongsGrid::-webkit-scrollbar{height:5px}
+#recentlyPlayedGrid > .song-card,
+#sponsoredGrid > .song-card,
+#verifiedArtistsGrid > .song-card,
+#officialTracksGrid > .song-card,
+#kadongo-grid > .song-card,
+#trending-today-grid > .song-card,
+#top-downloads-grid > .song-card,
+#relatedSongsGrid > .song-card{
+  flex:0 0 190px !important;
+  width:190px !important;
+  min-width:190px !important;
+  scroll-snap-align:start;
+}
+
+/* Shelf header */
+.dm-shelf-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.dm-shelf-title{font-size:18px;font-weight:900;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+.dm-shelf-actions{display:flex;gap:6px;flex-shrink:0}
+.dm-scroll-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--dm-glass);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:.2s}
+.dm-scroll-btn:hover{background:var(--dm-orange);border-color:var(--dm-orange);color:#fff;transform:translateY(-1px)}
+
+/* Quick discovery bar */
+.dm-quickbar{position:sticky;top:56px;z-index:100;background:rgba(8,10,16,.84);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.07);padding:9px 14px}
+.dm-quickbar-inner{max-width:1240px;margin:auto;display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none}
+.dm-quickbar-inner::-webkit-scrollbar{display:none}
+.dm-chip{flex:0 0 auto;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.045);color:#cbd5e1;border-radius:999px;padding:8px 13px;font-size:12px;font-weight:800;cursor:pointer;transition:.2s;white-space:nowrap}
+.dm-chip:hover,.dm-chip.active{background:linear-gradient(135deg,var(--dm-orange),#f97316);border-color:transparent;color:#fff;box-shadow:0 5px 18px rgba(255,107,0,.24)}
+
+/* Featured spotlight */
+.dm-spotlight{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-bottom:28px;padding:18px;border-radius:20px;border:1px solid rgba(255,107,0,.22);background:radial-gradient(circle at 85% 20%,rgba(255,107,0,.18),transparent 35%),linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.025));box-shadow:0 16px 50px rgba(0,0,0,.18);overflow:hidden;position:relative}
+.dm-spotlight-copy{min-width:0;display:flex;flex-direction:column;justify-content:center;padding:6px 4px}
+.dm-kicker{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--dm-orange2);margin-bottom:8px}
+.dm-spot-title{font-size:clamp(24px,4vw,42px);font-weight:950;line-height:1.02;letter-spacing:-1.2px;margin:0;color:#fff}
+.dm-spot-artist{font-size:14px;color:#a7b0c0;margin-top:8px}
+.dm-spot-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.dm-meta-pill{font-size:11px;font-weight:800;padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.06);color:#d8dee8;border:1px solid rgba(255,255,255,.08)}
+.dm-spot-buttons{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.dm-main-btn,.dm-soft-btn{min-height:42px;border-radius:999px;padding:9px 17px;font-size:12px;font-weight:900;cursor:pointer}
+.dm-main-btn{border:none;background:linear-gradient(135deg,var(--dm-orange),#f97316);color:#fff;box-shadow:0 8px 22px rgba(255,107,0,.25)}
+.dm-soft-btn{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.055);color:#fff}
+.dm-spot-art{min-height:230px;border-radius:16px;overflow:hidden;position:relative;background:#111827;border:1px solid rgba(255,255,255,.08)}
+.dm-spot-art img{width:100%;height:100%;object-fit:cover;display:block}
+.dm-spot-art:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.55))}
+.dm-art-play{position:absolute;z-index:2;left:16px;bottom:16px;width:52px;height:52px;border-radius:50%;border:0;background:var(--dm-orange);color:#fff;font-size:19px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+
+/* Genre browse */
+.dm-genres{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;margin-bottom:28px}
+.dm-genre{position:relative;overflow:hidden;min-height:62px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.065),rgba(255,255,255,.025));color:#fff;font-weight:900;font-size:12px;cursor:pointer;text-align:left;padding:12px;transition:.2s}
+.dm-genre:hover{transform:translateY(-2px);border-color:rgba(255,107,0,.45);box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.dm-genre span{display:block;color:#94a3b8;font-size:10px;font-weight:600;margin-top:3px}
+
+/* Compact card polish */
+.song-card{transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease !important}
+.song-card:hover{transform:translateY(-4px) !important;box-shadow:0 14px 30px rgba(0,0,0,.22) !important}
+.song-card .song-title{font-weight:850 !important}
+.song-card .artist-name{font-size:11px !important}
+
+/* Floating shelf helper */
+.dm-shelf-wrap{position:relative}
+.dm-fade-right{position:absolute;right:0;top:0;bottom:8px;width:48px;pointer-events:none;background:linear-gradient(to left,var(--bg),transparent);opacity:.7}
+
+@media(max-width:900px){
+  .dm-genres{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .dm-spotlight{grid-template-columns:1fr}
+  .dm-spot-art{min-height:210px;max-height:300px}
+}
+@media(max-width:600px){
+  .dm-quickbar{top:48px;padding:7px 10px}
+  .dm-chip{padding:7px 11px;font-size:11px}
+  .dm-genres{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .dm-genre{min-height:58px}
+  .dm-spotlight{padding:13px;border-radius:16px;gap:12px}
+  .dm-spot-art{min-height:190px}
+  .dm-shelf-title{font-size:16px}
+  #recentlyPlayedGrid > .song-card,
+  #sponsoredGrid > .song-card,
+  #verifiedArtistsGrid > .song-card,
+  #officialTracksGrid > .song-card,
+  #kadongo-grid > .song-card,
+  #trending-today-grid > .song-card,
+  #top-downloads-grid > .song-card,
+  #relatedSongsGrid > .song-card{flex-basis:160px !important;width:160px !important;min-width:160px !important}
+}
+@media(prefers-reduced-motion:reduce){.song-card,.dm-genre,.dm-scroll-btn{transition:none !important}}
+</style>
+
 </head>
 <body>
 
@@ -2175,6 +2511,58 @@ button, .song-card, .song-row, input, select, textarea {
     }
   </style>
 
+
+<!-- ===== DJ MUSTA MODERN DISCOVERY TOOLS ===== -->
+<div id="dmQuickBar" class="dm-quickbar">
+  <div class="dm-quickbar-inner">
+    <span style="font-size:11px;font-weight:900;color:#94a3b8;white-space:nowrap">DISCOVER</span>
+    <button class="dm-chip active" onclick="dmScrollTo('musicSections')">🏠 Home</button>
+    <button class="dm-chip" onclick="navTo('trending',null)">🔥 Trending</button>
+    <button class="dm-chip" onclick="dmScrollTo('trending-today-wrap')">⚡ Hot Today</button>
+    <button class="dm-chip" onclick="filterGenre('Afrobeat')">🎵 Afrobeat</button>
+    <button class="dm-chip" onclick="filterGenre('Dancehall')">💃 Dancehall</button>
+    <button class="dm-chip" onclick="filterGenre('Gospel')">🙏 Gospel</button>
+    <button class="dm-chip" onclick="filterGenre('Kadongo Kamu')">🇺🇬 Kadongo Kamu</button>
+    <button class="dm-chip" onclick="filterGenre('Hip Hop')">🎤 Hip Hop</button>
+    <button class="dm-chip" onclick="navToPage('artists',null)">🎤 Artists</button>
+  </div>
+</div>
+
+<div id="dmDiscoveryIntro" style="max-width:1240px;margin:20px auto 0;padding:0 14px">
+  <div id="dmSpotlight" class="dm-spotlight" style="display:none">
+    <div class="dm-spotlight-copy">
+      <div class="dm-kicker">🔥 DJ MUSTA FEATURED</div>
+      <h2 id="dmSpotTitle" class="dm-spot-title">Latest Ugandan Music</h2>
+      <div id="dmSpotArtist" class="dm-spot-artist">Discover something new today</div>
+      <div id="dmSpotMeta" class="dm-spot-meta"></div>
+      <div class="dm-spot-buttons">
+        <button id="dmSpotPlay" class="dm-main-btn">▶ Play Now</button>
+        <button id="dmSpotShare" class="dm-soft-btn">↗ Share</button>
+      </div>
+    </div>
+    <div class="dm-spot-art">
+      <img id="dmSpotCover" src="" alt="Featured song artwork" loading="eager">
+      <button id="dmSpotArtPlay" class="dm-art-play" aria-label="Play featured song">▶</button>
+    </div>
+  </div>
+
+  <div style="margin-bottom:28px">
+    <div class="dm-shelf-head">
+      <div class="dm-shelf-title">🎸 Browse Genres</div>
+    </div>
+    <div class="dm-genres">
+      <button class="dm-genre" onclick="filterGenre('Afrobeat')">Afrobeat<span>Uganda & Africa</span></button>
+      <button class="dm-genre" onclick="filterGenre('Dancehall')">Dancehall<span>Fresh vibes</span></button>
+      <button class="dm-genre" onclick="filterGenre('Kadongo Kamu')">Kadongo Kamu<span>Ugandan classics</span></button>
+      <button class="dm-genre" onclick="filterGenre('Gospel')">Gospel<span>Faith & praise</span></button>
+      <button class="dm-genre" onclick="filterGenre('Hip Hop')">Hip Hop<span>Bars & beats</span></button>
+      <button class="dm-genre" onclick="filterGenre('R&B')">R&amp;B<span>Smooth sounds</span></button>
+      <button class="dm-genre" onclick="filterGenre('Reggae')">Reggae<span>Roots & culture</span></button>
+      <button class="dm-genre" onclick="filterGenre('Oldies')">Oldies<span>Timeless music</span></button>
+    </div>
+  </div>
+</div>
+
   <!-- ===== MAIN CONTENT ===== -->
   <main id="discover-feed" aria-label="Music discovery feed">
   <div id="musicSections" style="max-width:1240px;margin:20px auto;padding:0 14px">
@@ -2255,7 +2643,7 @@ button, .song-card, .song-row, input, select, textarea {
 
     <!-- ===== MORE MUSIC ===== -->
     <div id="moreMusicWrap" style="margin-bottom:24px">
-      <button id="moreMusicToggle" type="button" aria-expanded="false" onclick="toggleMoreMusic()" style="width:100%;padding:11px 14px;background:#17253b;border:1px solid #2b405d;border-radius:9px;color:#cbd5e1;font:700 13px inherit;text-align:left;cursor:pointer;min-height:44px">＋ More Music</button>
+      <button id="moreMusicToggle" type="button" aria-expanded="false" onclick="toggleMoreMusic()" style="width:100%;padding:11px 14px;background:#17253b;border:1px solid #2b405d;border-radius:9px;color:#cbd5e1;font:700 13px inherit;text-align:left;cursor:pointer;min-height:44px">＋ More Music · Charts & Extras</button>
       <div id="moreMusicContent" style="display:none;padding-top:20px">
         <!-- TOP DOWNLOADS -->
         <div id="top-downloads-wrap" style="margin-bottom:32px">
@@ -3343,7 +3731,7 @@ button, .song-card, .song-row, input, select, textarea {
     // ============================================================
     function showSkeletons() {
       songsGrid.className = 'music-grid';
-      songsGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))!important;grid-auto-flow:row!important;overflow:visible!important';
+      songsGrid.style.cssText = 'display:grid;grid-auto-flow:row;overflow:visible;grid-template-rows:none';
       songsGrid.innerHTML = Array(8).fill(`
         <div style="background:var(--card);border-radius:14px;overflow:hidden">
           <div class="skeleton-card" style="aspect-ratio:1/1"></div>
@@ -3437,7 +3825,7 @@ button, .song-card, .song-row, input, select, textarea {
         songsGrid.className = currentView === 'grid' ? 'music-grid' : 'music-list';
         // Force grid layout — override any mobile horizontal-scroll CSS
         if (currentView === 'grid') {
-          songsGrid.style.cssText = 'display:grid!important;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))!important;grid-auto-flow:row!important;overflow:visible!important;grid-template-rows:none!important';
+          songsGrid.style.cssText = 'display:grid;grid-auto-flow:row;overflow:visible;grid-template-rows:none';
         } else {
           songsGrid.style.cssText = '';
         }
@@ -3482,7 +3870,6 @@ button, .song-card, .song-row, input, select, textarea {
                 <div class="song-title" itemprop="name">${esc(s.title)}</div>
                 <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(formatArtistNames(s.artist))}</span>${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</div>
                 <div class="card-actions-row">
-                <div class="card-actions-row">
                   <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg></button>
                   <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 13l5 5 5-5"/><path d="M5 21h14"/></svg></button>
                   <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
@@ -3509,6 +3896,7 @@ button, .song-card, .song-row, input, select, textarea {
             </div>
           </div>`).join('');
       }
+      try { if (window.renderDjmustaModern) window.renderDjmustaModern(); } catch(e) {}
     }
 
     // ============================================================
@@ -6283,5 +6671,76 @@ button, .song-card, .song-row, input, select, textarea {
     // ============================================================
     document.addEventListener('DOMContentLoaded', init);
   </script>
+
+<script id="djmusta-modern-upgrade-js">
+(function(){
+  function escLocal(v){
+    try { return typeof esc === 'function' ? esc(v) : String(v ?? '').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); } catch(e){ return String(v ?? ''); }
+  }
+  function firstUsefulSong(){
+    if (Array.isArray(window.songs) && window.songs.length) return window.songs[0];
+    if (typeof songs !== 'undefined' && songs.length) return songs[0];
+    return null;
+  }
+  window.dmScrollTo=function(id){
+    const el=document.getElementById(id); if(!el) return;
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+  };
+  window.dmScrollShelf=function(id,dir){
+    const el=document.getElementById(id); if(!el) return;
+    el.scrollBy({left:dir*(el.clientWidth*.78),behavior:'smooth'});
+  };
+  function renderSpotlight(){
+    const s=firstUsefulSong(), wrap=document.getElementById('dmSpotlight');
+    if(!s || !wrap) return;
+    const cover=(typeof imgSrc==='function') ? imgSrc(s.cover_path || s.cover_image || '') : (s.cover_path || s.cover_image || '');
+    document.getElementById('dmSpotTitle').textContent=s.title || 'Featured Song';
+    document.getElementById('dmSpotArtist').textContent=s.artist || 'DJ Musta Music';
+    document.getElementById('dmSpotCover').src=cover || (window.DEFAULT_COVER || '');
+    const meta=[];
+    if(s.genre) meta.push(s.genre);
+    if(s.duration) meta.push('⏱ '+s.duration);
+    if(s.play_count!=null) meta.push('▶ '+Number(s.play_count).toLocaleString()+' plays');
+    document.getElementById('dmSpotMeta').innerHTML=meta.map(x=>'<span class="dm-meta-pill">'+escLocal(x)+'</span>').join('');
+    const play=()=>{ if(typeof playSong==='function') playSong(s.id); };
+    document.getElementById('dmSpotPlay').onclick=play;
+    document.getElementById('dmSpotArtPlay').onclick=play;
+    document.getElementById('dmSpotShare').onclick=()=>{ if(typeof openShare==='function') openShare(s.id,s.title,s.artist); };
+    wrap.style.display='grid';
+  }
+  function addShelfControls(){
+    const ids=['recentlyPlayedGrid','sponsoredGrid','verifiedArtistsGrid','officialTracksGrid','kadongo-grid','trending-today-grid','top-downloads-grid','relatedSongsGrid','songsGrid'];
+    ids.forEach(id=>{
+      const grid=document.getElementById(id); if(!grid || grid.dataset.dmControls==='1') return;
+      const parent=grid.parentElement; if(!parent) return;
+      parent.classList.add('dm-shelf-wrap');
+      const head=parent.previousElementSibling;
+      if(head && head.classList.contains('dm-shelf-head')) return;
+      if(head){
+        const actions=document.createElement('div');
+        actions.className='dm-shelf-actions';
+        actions.innerHTML='<button class="dm-scroll-btn" type="button" aria-label="Scroll left">‹</button><button class="dm-scroll-btn" type="button" aria-label="Scroll right">›</button>';
+        head.appendChild(actions);
+        const bs=actions.querySelectorAll('button');
+        bs[0].onclick=()=>dmScrollShelf(id,-1); bs[1].onclick=()=>dmScrollShelf(id,1);
+      }
+      grid.dataset.dmControls='1';
+    });
+  }
+  function run(){
+    renderSpotlight();
+    addShelfControls();
+  }
+  window.renderDjmustaModern=run;
+  document.addEventListener('DOMContentLoaded',()=>{
+    setTimeout(run,500);
+    const grid=document.getElementById('songsGrid');
+    if(grid){
+      new MutationObserver(()=>setTimeout(run,60)).observe(grid,{childList:true});
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
