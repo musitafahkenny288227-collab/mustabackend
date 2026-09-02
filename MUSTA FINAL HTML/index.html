@@ -998,21 +998,25 @@
         font-size: 18px !important;
       }
       .music-grid {
-        grid-template-columns: none !important;
-        grid-template-rows: auto !important;
-        grid-auto-flow: column !important;
-        grid-auto-columns: minmax(140px, 42vw) !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
         overflow-x: auto !important;
         overflow-y: hidden !important;
-        scrollbar-width: thin !important;
-        scrollbar-color: #00d4aa rgba(255,255,255,.08) !important;
-        gap: 8px !important;
-        padding-bottom: 10px !important;
-        align-items: start !important;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+        gap: 10px !important;
+        padding: 4px 2px 12px !important;
+        scrollbar-width: none !important;
+      }
+
+      .music-grid .song-card {
+        flex: 0 0 140px !important;
+        width: 140px !important;
+        scroll-snap-align: start;
       }
       .music-grid::-webkit-scrollbar {
         height: 4px !important;
-        display: block !important;
+        display: none !important;
       }
       .music-grid::-webkit-scrollbar-track {
         background: rgba(255,255,255,.06) !important;
@@ -2029,8 +2033,34 @@ button, .song-card, .song-row, input, select, textarea {
     width:154px !important;
     min-width:154px !important;
     max-width:154px !important;
+    height:auto !important;
     scroll-snap-align:start !important;
     border-radius:12px !important;
+    align-self:flex-start !important;
+  }
+  /* Fix huge gaps between sections */
+  #verifiedArtistsWrap,
+  #officialTracksWrap,
+  #trending-today-wrap,
+  #top-downloads-wrap,
+  #sponsoredWrap,
+  #recentlyPlayedWrap,
+  #relatedSongsWrap,
+  #songOfDayWrap {
+    margin-bottom:20px !important;
+  }
+  /* Remove empty space below scrolling rows */
+  .music-grid,
+  #songsGrid.music-grid,
+  #verifiedArtistsGrid,
+  #officialTracksGrid,
+  #trending-today-grid,
+  #top-downloads-grid,
+  #relatedSongsGrid,
+  #recentlyPlayedGrid,
+  #sponsoredGrid {
+    height:auto !important;
+    min-height:0 !important;
   }
   .song-card .image-wrapper { aspect-ratio:1/1 !important; }
   .song-card .card-details { padding:8px !important; }
