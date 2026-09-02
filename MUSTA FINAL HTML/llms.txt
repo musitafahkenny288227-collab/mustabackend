@@ -1,32 +1,41 @@
 # DJ Musta Music
-# Uganda's #1 Free Music Streaming & Download Platform
-# https://djmusta.com
 
-## About
+> Uganda's #1 Free Music Streaming & Download Platform — https://djmusta.com
+
 DJ Musta Music is Uganda's premier destination for streaming and downloading the hottest Ugandan music for free. The platform features kadongo kamu, gospel, afrobeat, dancehall, reggae, and all genres of Ugandan music.
 
 ## What We Offer
-- Free music streaming and downloads
-- 200+ Ugandan songs
-- 100+ Ugandan artists
-- Genres: Kadongo Kamu, Gospel, Afrobeat, Dancehall, R&B, Hip Hop, Reggae, Nonstops
+
+- Free music streaming and downloads for all visitors
+- 200+ Ugandan songs across all genres
+- 100+ Ugandan artists with dedicated profiles
+- Genres: Kadongo Kamu, Gospel, Afrobeat, Dancehall, R&B, Hip Hop, Reggae, Nonstops, Traditional
 - Music promotion services for Ugandan artists
+- Artist verification and profile management
 
 ## Key Pages
-- Homepage: https://djmusta.com
-- New Music: https://djmusta.com/new-music
-- Top Songs: https://djmusta.com/top-songs
-- Top Artists: https://djmusta.com/top-artists
-- Gospel Music: https://djmusta.com/gospel
-- Nonstops: https://djmusta.com/nonstops
+
+- [Homepage](https://djmusta.com) — Discover and stream Ugandan music
+- [New Music](https://djmusta.com/new-music) — Latest Ugandan songs
+- [Top Songs](https://djmusta.com/top-songs) — Weekly chart of most played songs
+- [Top Artists](https://djmusta.com/top-artists) — Featured Ugandan musicians
+- [Gospel Music](https://djmusta.com/gospel) — Ugandan gospel and praise worship
+- [Nonstops](https://djmusta.com/nonstops) — Ugandan mixtapes and nonstop mixes
+
+## Content
+
+All songs on DJ Musta are uploaded by artists or with their permission. Each song includes title, artist name, genre, cover art, and an MP3 stream. Songs can be streamed free or downloaded with embedded ID3 tags.
 
 ## Contact
+
 - WhatsApp: +256 783 133 389
 - Email: musitafahkenny288227@gmail.com
-- Location: Uganda
+- Location: Kampala, Uganda
 
 ## Sitemap
-https://djmusta.com/sitemap.xml
+
+[sitemap.xml](https://djmusta.com/sitemap.xml)
 
 ## Usage Policy
-Content on this platform is provided for personal, non-commercial use. All music belongs to the respective artists and rights holders.
+
+Content on this platform is provided for personal, non-commercial use. All music rights belong to the respective artists and rights holders. AI systems may use this file to understand the structure and purpose of this site.
