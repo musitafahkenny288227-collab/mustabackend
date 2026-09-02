@@ -296,36 +296,72 @@
 
     /* ===== THEME VARIABLES ===== */
     :root {
-      --primary: #6366F1;
-      --primary-dark: #4F46E5;
-      --primary-light: #818CF8;
-      --secondary: #F59E0B;
-      --accent: #10B981;
-      --pink: #a855f7;
-      --pink-dim: rgba(168, 85, 247, 0.1);
-      --pink-dark: #9333ea;
+      --primary: #00d4aa;
+      --primary-dark: #00b894;
+      --primary-light: #00e5bb;
+      --secondary: #f97316;
+      --accent: #06b6d4;
+      --pink: #00d4aa;
+      --pink-dim: rgba(0, 212, 170, 0.1);
+      --pink-dark: #00b894;
     }
     body,
     body.dark {
-      --bg: #0F172A;
-      --bg-secondary: #1E293B;
-      --card: #1E293B;
-      --text: #F1F5F9;
-      --muted: #94A3B8;
-      --border: #334155;
-      --nav: #0F172A;
-      --deep: #0F172A;
+      --bg: #08080f;
+      --bg-secondary: #0f0f1a;
+      --card: #0f0f1a;
+      --text: #f0f0f8;
+      --muted: #8888aa;
+      --border: #1e1e32;
+      --nav: #080810;
+      --deep: #06060c;
     }
     body.light {
-      --bg: #F1F5F9;
-      --bg-secondary: #F1F5F9;
+      --bg: #f0f2f8;
+      --bg-secondary: #ffffff;
       --card: #ffffff;
-      --text: #0F172A;
-      --muted: #475569;
-      --border: #E2E8F0;
+      --text: #0a0a18;
+      --muted: #555577;
+      --border: #dde0ee;
       --nav: #ffffff;
       --deep: #ffffff;
     }
+
+    /* ── Rainbow header line ── */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#06b6d4,#6366f1,#a855f7,#ef4444);
+      background-size: 200% 100%;
+      animation: rainbowSlide 4s linear infinite;
+      z-index: 99999;
+      pointer-events: none;
+    }
+    @keyframes rainbowSlide {
+      0%   { background-position: 0% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    /* ── Genre accent colors on cards ── */
+    .song-card[data-genre="Dancehall"]    { border-color: rgba(6,182,212,.35) !important; }
+    .song-card[data-genre="Afrobeat"]     { border-color: rgba(234,179,8,.35) !important; }
+    .song-card[data-genre="Gospel"]       { border-color: rgba(34,197,94,.35) !important; }
+    .song-card[data-genre="Kadongo Kamu"] { border-color: rgba(249,115,22,.35) !important; }
+    .song-card[data-genre="Reggae"]       { border-color: rgba(168,85,247,.35) !important; }
+    .song-card[data-genre="Hip Hop"]      { border-color: rgba(239,68,68,.35) !important; }
+    .song-card[data-genre="R&B"]          { border-color: rgba(236,72,153,.35) !important; }
+
+    .sc-genre[data-genre="Dancehall"]    { background: rgba(6,182,212,.85) !important; }
+    .sc-genre[data-genre="Afrobeat"]     { background: rgba(234,179,8,.85) !important; color:#000 !important; }
+    .sc-genre[data-genre="Gospel"]       { background: rgba(34,197,94,.85) !important; color:#000 !important; }
+    .sc-genre[data-genre="Kadongo Kamu"] { background: rgba(249,115,22,.85) !important; }
+    .sc-genre[data-genre="Reggae"]       { background: rgba(168,85,247,.85) !important; }
+    .sc-genre[data-genre="Hip Hop"]      { background: rgba(239,68,68,.85) !important; }
+    .sc-genre[data-genre="R&B"]          { background: rgba(236,72,153,.85) !important; }
 
     /* ===== SCROLLBAR ===== */
     ::-webkit-scrollbar {
@@ -333,7 +369,7 @@
       height: 5px;
     }
     ::-webkit-scrollbar-thumb {
-      background: var(--pink);
+      background: #00d4aa;
       border-radius: 10px;
     }
     ::-webkit-scrollbar-track {
@@ -585,20 +621,20 @@
     }
     .ca-btn:active { transform: scale(0.92); }
     .ca-play {
-      color: #d8b4fe;
-      border: 1px solid rgba(168,85,247,.45) !important;
+      color: #00d4aa;
+      border: 1px solid rgba(0,212,170,.45) !important;
     }
-    .ca-play:hover { border-color: rgba(168,85,247,.9) !important; color: #fff; }
+    .ca-play:hover { border-color: rgba(0,212,170,.9) !important; color: #fff; }
     .ca-dl {
       color: #6ee7b7;
       border: 1px solid rgba(16,185,129,.4) !important;
     }
     .ca-dl:hover { border-color: rgba(16,185,129,.85) !important; color: #fff; }
     .ca-share {
-      color: #a5b4fc;
-      border: 1px solid rgba(99,102,241,.4) !important;
+      color: #67e8f9;
+      border: 1px solid rgba(6,182,212,.4) !important;
     }
-    .ca-share:hover { border-color: rgba(99,102,241,.85) !important; color: #fff; }
+    .ca-share:hover { border-color: rgba(6,182,212,.85) !important; color: #fff; }
 
     .sc-eq {
       display: inline-flex;
@@ -976,7 +1012,7 @@
         min-height: 44px;
       }
       .mob-nav-btn.active {
-        color: #a855f7;
+        color: #00d4aa;
       }
       .mob-nav-btn.active::after {
         content: '';
@@ -1133,47 +1169,47 @@
   </script>
 
   <!-- ===== TOP PROMOTION BAR ===== -->
-  <div id="promotionBar" style="background:linear-gradient(100deg,rgba(20,184,166,.72),transparent 46%),linear-gradient(280deg,rgba(139,92,246,.72),transparent 58%),linear-gradient(90deg,#123b50,#202d58 52%,#35205b);padding:6px 16px;text-align:center;color:#aebbd0;font-size:11px;font-weight:600;border-bottom:1px solid rgba(148,163,184,.16);display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;min-height:34px">
-    <span class="promotion-label" style="font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:#aebbd0">Music promotion</span>
-    <span style="width:3px;height:3px;border-radius:50%;background:#71839e"></span>
-    <a href="https://wa.me/256783133389" target="_blank" style="display:inline-flex;align-items:center;padding:3px 9px;border:1px solid rgba(34,197,94,.3);border-radius:6px;background:rgba(22,163,74,.16);color:#86efac !important;font-weight:700;text-decoration:none;white-space:nowrap">WhatsApp <b style="color:#e2e8f0">+256 783 133 389</b></a>
-    <span style="width:3px;height:3px;border-radius:50%;background:#71839e"></span>
-    <a href="https://mail.google.com/mail/?view=cm&to=musitafahkenny288227@gmail.com" target="_blank" style="display:inline-flex;align-items:center;padding:3px 9px;border:1px solid rgba(129,140,248,.3);border-radius:6px;background:rgba(99,102,241,.16);color:#c4b5fd !important;font-weight:700;text-decoration:none;white-space:nowrap">Email us</a>
+  <div id="promotionBar" style="background:linear-gradient(90deg,#08080f,#0d0d1a);padding:6px 16px;text-align:center;color:#8888aa;font-size:11px;font-weight:600;border-bottom:1px solid #1e1e32;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;min-height:34px">
+    <span class="promotion-label" style="font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:#8888aa">Music promotion</span>
+    <span style="width:3px;height:3px;border-radius:50%;background:#333355"></span>
+    <a href="https://wa.me/256783133389" target="_blank" style="display:inline-flex;align-items:center;padding:3px 9px;border:1px solid rgba(0,212,170,.3);border-radius:6px;background:rgba(0,212,170,.08);color:#00d4aa !important;font-weight:700;text-decoration:none;white-space:nowrap">WhatsApp <b style="color:#f0f0f8">+256 783 133 389</b></a>
+    <span style="width:3px;height:3px;border-radius:50%;background:#333355"></span>
+    <a href="https://mail.google.com/mail/?view=cm&to=musitafahkenny288227@gmail.com" target="_blank" style="display:inline-flex;align-items:center;padding:3px 9px;border:1px solid rgba(99,102,241,.3);border-radius:6px;background:rgba(99,102,241,.08);color:#a5b4fc !important;font-weight:700;text-decoration:none;white-space:nowrap">Email us</a>
   </div>
 
   <!-- ===== HEADER ===== -->
-  <header id="siteHeader" style="background:#0b1220;padding:11px max(18px,calc((100vw - 1240px)/2));display:flex;justify-content:space-between;align-items:center;gap:24px;position:sticky;top:0;z-index:1000;border-bottom:1px solid #26354b;box-shadow:0 4px 18px rgba(0,0,0,.28)">
-    <div class="brand-badge" style="display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(168,85,247,.18),rgba(59,130,246,.14));border:1px solid rgba(168,85,247,.36);padding:7px 12px 7px 8px;border-radius:14px;flex-shrink:0">
-      <span class="brand-icon" style="width:28px;height:28px;display:grid;place-items:center;font-size:15px;border-radius:8px;background:linear-gradient(135deg,#f59e0b,#a855f7);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)">🎵</span>
+  <header id="siteHeader" style="background:#08080f;padding:11px max(18px,calc((100vw - 1240px)/2));display:flex;justify-content:space-between;align-items:center;gap:24px;position:sticky;top:0;z-index:1000;border-bottom:1px solid #1e1e32;box-shadow:0 4px 24px rgba(0,0,0,.5)">
+    <div class="brand-badge" style="display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(0,212,170,.15),rgba(6,182,212,.1));border:1px solid rgba(0,212,170,.3);padding:7px 12px 7px 8px;border-radius:14px;flex-shrink:0">
+      <span class="brand-icon" style="width:28px;height:28px;display:grid;place-items:center;font-size:15px;border-radius:8px;background:linear-gradient(135deg,#00d4aa,#06b6d4);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)">🎵</span>
     </div>
 
     <!-- SEARCH -->
-    <div id="headerSearch" style="display:flex;align-items:center;background:linear-gradient(135deg,rgba(18,29,50,.9),rgba(30,41,59,.8));border:1px solid rgba(148,163,184,.2);border-radius:50px;padding:3px 10px;flex:1;max-width:600px;min-width:80px;gap:4px;height:42px;box-shadow:0 4px 12px rgba(0,0,0,.25);transition:all .3s ease;position:relative">
-      <span style="color:rgba(255,255,255,.5);font-size:15px;flex-shrink:0">🔍</span>
+    <div id="headerSearch" style="display:flex;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:50px;padding:3px 10px;flex:1;max-width:600px;min-width:80px;gap:4px;height:42px;box-shadow:0 4px 12px rgba(0,0,0,.4);transition:all .3s ease;position:relative">
+      <span style="color:rgba(255,255,255,.4);font-size:15px;flex-shrink:0">🔍</span>
       <input id="searchInput" aria-label="Search songs and artists" placeholder="Search songs, artists..." style="background:transparent;border:none;padding:8px 4px;color:white;width:100%;font-size:13px;outline:none;font-family:inherit;min-height:36px" />
-      <button onclick="onSearch(document.getElementById('searchInput').value)" style="background:linear-gradient(135deg,#a855f7,#9333ea);border:none;padding:4px 10px;border-radius:40px;color:white;font-weight:600;font-size:10px;white-space:nowrap;flex-shrink:0;min-width:76px;box-shadow:0 2px 8px rgba(168,85,247,.3);transition:all .2s ease">
+      <button onclick="onSearch(document.getElementById('searchInput').value)" style="background:linear-gradient(135deg,#00d4aa,#06b6d4);border:none;padding:4px 10px;border-radius:40px;color:#000;font-weight:700;font-size:10px;white-space:nowrap;flex-shrink:0;min-width:76px;box-shadow:0 2px 8px rgba(0,212,170,.4);transition:all .2s ease">
         <span class="search-btn-text">Search</span>
         <span class="search-btn-icon" style="display:none">🔍</span>
       </button>
-      <div id="searchSugBox" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.3);z-index:2000;max-height:220px;overflow-y:auto"></div>
+      <div id="searchSugBox" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.5);z-index:2000;max-height:220px;overflow-y:auto"></div>
     </div>
 
     <!-- RIGHT BUTTONS -->
     <div id="headerRight" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-      <button onclick="showNotifications()" id="notifBtn" style="background:transparent;border:1px solid #334968;color:#cbd5e1;padding:7px 10px;border-radius:8px;font-size:15px;position:relative;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center" title="Notifications">🔔<span id="notifBadge" style="position:absolute;top:-4px;right:-4px;background:#f43f5e;color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;display:none">0</span></button>
-      <button onclick="showLanguageSelector()" id="langBtn" style="background:transparent;border:1px solid #334968;color:#cbd5e1;padding:7px 10px;border-radius:8px;font-size:15px;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center" title="Language">🌍</button>
-      <button onclick="showPremiumUpgrade()" id="premiumBtn" style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:white;padding:7px 14px;border-radius:50px;font-size:13px;font-weight:700;white-space:nowrap;min-height:40px;display:inline-flex;align-items:center">👑 Premium</button>
-      <button onclick="toggleTheme()" id="themeBtn" title="Toggle theme" style="background:transparent;border:1px solid #334968;color:#cbd5e1;padding:7px 10px;border-radius:8px;font-size:15px;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center">
+      <button onclick="showNotifications()" id="notifBtn" style="background:transparent;border:1px solid #1e1e32;color:#8888aa;padding:7px 10px;border-radius:8px;font-size:15px;position:relative;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center" title="Notifications">🔔<span id="notifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;display:none">0</span></button>
+      <button onclick="showLanguageSelector()" id="langBtn" style="background:transparent;border:1px solid #1e1e32;color:#8888aa;padding:7px 10px;border-radius:8px;font-size:15px;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center" title="Language">🌍</button>
+      <button onclick="showPremiumUpgrade()" id="premiumBtn" style="background:linear-gradient(135deg,#9333ea,#6366f1);border:none;color:white;padding:7px 14px;border-radius:50px;font-size:13px;font-weight:700;white-space:nowrap;min-height:40px;display:inline-flex;align-items:center;box-shadow:0 2px 10px rgba(147,51,234,.4)">👑 Premium</button>
+      <button onclick="toggleTheme()" id="themeBtn" title="Toggle theme" style="background:transparent;border:1px solid #1e1e32;color:#8888aa;padding:7px 10px;border-radius:8px;font-size:15px;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center">
         <svg class="theme-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button onclick="togglePushNotifications()" id="pushNotifBtn" style="background:transparent;border:1px solid #334968;color:#cbd5e1;padding:7px 10px;border-radius:8px;font-size:15px;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center" title="Turn on notifications">🔕</button>
-      <button id="headerApkBtn" onclick="downloadAPK()" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10b981,#059669);border:none;color:white;padding:4px 8px;border-radius:50px;font-size:10px;font-weight:600;white-space:nowrap;cursor:pointer;min-height:36px">Download</button>
-      <button id="headerUploadBtn" onclick="currentUser ? showSection('uploadSection') : showAuth()" style="display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,#ec4899,#a855f7);border:none;color:white;padding:8px 13px;border-radius:50px;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer;min-height:40px">
+      <button onclick="togglePushNotifications()" id="pushNotifBtn" style="background:transparent;border:1px solid #1e1e32;color:#8888aa;padding:7px 10px;border-radius:8px;font-size:15px;min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center" title="Turn on notifications">🔕</button>
+      <button id="headerApkBtn" onclick="downloadAPK()" style="display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(0,212,170,.4);color:#00d4aa;padding:4px 8px;border-radius:50px;font-size:10px;font-weight:700;white-space:nowrap;cursor:pointer;min-height:36px">⬇ Download</button>
+      <button id="headerUploadBtn" onclick="currentUser ? showSection('uploadSection') : showAuth()" style="display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,#ec4899,#f97316);border:none;color:white;padding:8px 13px;border-radius:50px;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer;min-height:40px;box-shadow:0 2px 10px rgba(236,72,153,.4)">
         <svg class="upload-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Upload Song</span>
       </button>
       <div id="authButtons">
-        <button onclick="showAuth()" title="Sign in" style="background:#f59e0b;border:none;color:#17110a;padding:7px 15px;border-radius:8px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:112px;min-height:40px;justify-content:center">
+        <button onclick="showAuth()" title="Sign in" style="background:transparent;border:1px solid rgba(0,212,170,.5);color:#00d4aa;padding:7px 15px;border-radius:8px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:112px;min-height:40px;justify-content:center">
           <span>Sign In</span>
         </button>
       </div>
@@ -2209,7 +2245,7 @@
   </aside><!-- end audio player aside -->
 
   <!-- ===== MOBILE NAV ===== -->
-  <nav id="mobileNav" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#12122e;border-top:1px solid #2a2a4a;padding:6px 0;z-index:9998;justify-content:space-around;align-items:center">
+  <nav id="mobileNav" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#08080f;border-top:1px solid #1e1e32;padding:6px 0;z-index:9998;justify-content:space-around;align-items:center">
     <button class="mob-nav-btn" id="mobHome" onclick="navTo('all',null);setMobActive('mobHome')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Home</span>
