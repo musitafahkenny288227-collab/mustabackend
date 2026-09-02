@@ -29,6 +29,13 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Redirect www → non-www (canonical domain)
+    if (url.hostname === 'www.djmusta.com') {
+      const canonical = new URL(request.url);
+      canonical.hostname = 'djmusta.com';
+      return Response.redirect(canonical.toString(), 301);
+    }
+
     // Intercept /song/* routes
     if (path.startsWith('/song/')) {
       return handleSongRoute(path, url);
