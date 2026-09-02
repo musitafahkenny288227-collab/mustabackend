@@ -1600,6 +1600,7 @@
   </style>
 
   <!-- ===== MAIN CONTENT ===== -->
+  <main id="discover-feed" aria-label="Music discovery feed">
   <div id="musicSections" style="max-width:1240px;margin:20px auto;padding:0 14px">
 
     <!-- ===== SONG OF THE DAY ===== -->
@@ -1826,9 +1827,10 @@
     </div>
     <div id="profileTabContent" style="background:var(--card);border-radius:16px;padding:24px;box-shadow:0 2px 16px rgba(0,0,0,.06);min-height:200px"></div>
   </div>
+  </main><!-- end #discover-feed -->
 
   <!-- ===== UPLOAD ===== -->
-  <div id="uploadSection" style="display:none;max-width:1240px;margin:20px auto;padding:0 14px">
+  <div id="uploadSection" aria-hidden="true" style="display:none;max-width:1240px;margin:20px auto;padding:0 14px">
     <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button id="singleUploadTab" class="upload-tab active" onclick="switchUploadMode('single')">📤 Single Upload</button>
       <button id="bulkUploadTab" class="upload-tab" onclick="switchUploadMode('bulk')">📦 Bulk Upload</button>
@@ -2071,7 +2073,7 @@
   </style>
 
   <!-- ===== ADMIN SECTION ===== -->
-  <div id="adminSection" style="display:none;max-width:1180px;margin:0 auto;padding:20px 14px 52px">
+  <div id="adminSection" aria-hidden="true" style="display:none;max-width:1180px;margin:0 auto;padding:20px 14px 52px">
     <div class="admin-heading" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <div style="min-width:0;flex:1">
         <div class="admin-kicker" style="color:#c084fc;font-size:10px;font-weight:800;letter-spacing:.16em;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">CONTROL CENTER <span style="display:inline-block;width:4px;height:4px;margin:0 7px 2px;border-radius:50%;background:#f59e0b"></span> LIVE OPERATIONS</div>
@@ -2141,6 +2143,7 @@
   </div>
 
   <!-- ===== AUDIO PLAYER ===== -->
+  <aside role="complementary" aria-label="Audio Player" id="audioPlayerContainer">
   <div id="audioPlayer">
     <div>
       <div>
@@ -2193,6 +2196,7 @@
       </div>
     </div>
   </div>
+  </aside><!-- end audio player aside -->
 
   <!-- ===== MOBILE NAV ===== -->
   <nav id="mobileNav" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#12122e;border-top:1px solid #2a2a4a;padding:6px 0;z-index:9998;justify-content:space-around;align-items:center">
@@ -2247,7 +2251,7 @@
   </div>
 
   <!-- FORGOT PASSWORD MODAL -->
-  <div id="forgotPasswordModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeForgotPassword()">
+  <div id="forgotPasswordModal" role="dialog" aria-modal="true" aria-label="Reset password" aria-hidden="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeForgotPassword()">
     <div style="background:var(--card);border-radius:20px;padding:36px;max-width:420px;width:100%;position:relative">
       <button onclick="closeForgotPassword()" style="position:absolute;top:12px;right:14px;font-size:22px;background:none;border:none;cursor:pointer;color:var(--muted)">✕</button>
       <h2 style="font-size:22px;margin-bottom:5px">Reset Password 🔑</h2>
@@ -2452,7 +2456,12 @@
       ];
       sections.forEach(s => {
         const el = document.getElementById(s);
-        if (el) el.style.display = (s === id) ? 'block' : 'none';
+        if (el) {
+          const visible = s === id;
+          el.style.display = visible ? 'block' : 'none';
+          // Keep aria-hidden in sync — hidden sections must not be read by crawlers or screen readers
+          el.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        }
       });
       const isHome = id === 'songsSection';
       document.querySelector('.hero-section')?.style.setProperty('display', isHome ? '' : 'none');
@@ -3169,6 +3178,7 @@
 
       addToHistory(s);
       updateSEO(s);
+      updateMusicMetadata(s); // inject MusicRecording JSON-LD + update URL hash
 
       // Update URL to pretty song slug for easy sharing
       const slugify = v => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
@@ -4897,6 +4907,90 @@
     // ============================================================
     // FOOTER MODALS
     // ============================================================
+    // ============================================================
+    // updateMusicMetadata — Schema.org MusicRecording injector
+    // Runs on every song play. Updates title, URL hash, and
+    // injects a clean JSON-LD MusicRecording block into <head>.
+    // ============================================================
+    function updateMusicMetadata(songData) {
+      if (!songData) return;
+
+      const slugify = v => String(v || '').trim().toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+
+      // 1. Update document title
+      document.title = `${songData.title} by ${songData.artist} | DJ Musta Music`;
+
+      // 2. Update URL state using hash — no full reload, no pretty URL conflict
+      window.history.pushState(
+        { songId: songData.id, songTitle: songData.title },
+        document.title,
+        `/#/song/${songData.id}`
+      );
+
+      // 3. Build image URL
+      const coverUrl = (() => {
+        const raw = songData.cover_path || songData.cover_image || '';
+        if (!raw) return 'https://djmusta.com/banner.jpg';
+        if (raw.startsWith('http')) return raw;
+        return API + raw;
+      })();
+
+      // 4. Build audio URL (stream endpoint)
+      const mp3Url = `${API}/api/songs/${songData.id}/stream`;
+
+      // 5. Remove any pre-existing music schema to prevent duplicates
+      document.querySelectorAll('script[data-music-schema]').forEach(el => el.remove());
+
+      // 6. Build MusicRecording JSON-LD
+      const schema = {
+        '@context': 'https://schema.org',
+        '@type': 'MusicRecording',
+        '@id': `https://djmusta.com/song/${slugify(songData.title)}/${slugify(songData.artist)}`,
+        'name': songData.title,
+        'byArtist': {
+          '@type': 'MusicGroup',
+          'name': songData.artist,
+          'url': `https://djmusta.com/?search=${encodeURIComponent(songData.artist)}`
+        },
+        'genre': songData.genre || 'Ugandan Music',
+        'datePublished': songData.created_at
+          ? songData.created_at.substring(0, 10)
+          : new Date().toISOString().substring(0, 10),
+        'image': {
+          '@type': 'ImageObject',
+          'url': coverUrl,
+          'width': 600,
+          'height': 600
+        },
+        'audio': {
+          '@type': 'AudioObject',
+          'contentUrl': mp3Url,
+          'encodingFormat': 'audio/mpeg',
+          'name': `${songData.title} - ${songData.artist}`,
+          'description': `Stream "${songData.title}" by ${songData.artist} on DJ Musta Music — Uganda's #1 free music platform.`
+        },
+        'url': `https://djmusta.com/song/${slugify(songData.title)}/${slugify(songData.artist)}`,
+        'inLanguage': 'en',
+        'publisher': {
+          '@type': 'Organization',
+          'name': 'DJ Musta Music',
+          'url': 'https://djmusta.com',
+          'logo': {
+            '@type': 'ImageObject',
+            'url': 'https://djmusta.com/icons/icon-512.png'
+          }
+        }
+      };
+
+      // 7. Inject into <head>
+      const scriptEl = document.createElement('script');
+      scriptEl.type = 'application/ld+json';
+      scriptEl.setAttribute('data-music-schema', 'true');
+      scriptEl.textContent = JSON.stringify(schema, null, 0);
+      document.head.appendChild(scriptEl);
+    }
+
     function showAbout() {
       showInfoModal('About DJ Musta', `
         <div style="line-height:1.8;color:var(--muted);font-size:14px">
