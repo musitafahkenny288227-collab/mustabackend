@@ -864,7 +864,7 @@ const server = http.createServer(async (req, res) => {
     // Dynamic sitemap.xml
     if (pathname === '/sitemap.xml') {
         try {
-            const songs = await query('SELECT id, title, artist, genre, created_at FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
+            const songs = await query('SELECT id, title, artist, genre, cover_image, cover_path, created_at FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
             const toSlug = str => str.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
 
             // Group: homepage + static pages + all songs
@@ -890,18 +890,27 @@ const server = http.createServer(async (req, res) => {
                 const titleSlug  = toSlug(s.title);
                 const artistSlug = toSlug(s.artist);
                 const songUrl    = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
-                const lastmod    = new Date(s.created_at).toISOString().split('T')[0];
+                const lastmod    = s.created_at ? new Date(s.created_at).toISOString().split('T')[0] : today;
+                const esc        = str => (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const coverUrl   = s.cover_image || s.cover_path || '';
+                const imageTag   = coverUrl ? `
+    <image:image>
+      <image:loc>${esc(coverUrl.startsWith('http') ? coverUrl : 'https://djmusta.com' + coverUrl)}</image:loc>
+      <image:title>${esc(s.title)} by ${esc(s.artist)}</image:title>
+      <image:caption>${esc(s.genre || 'Ugandan Music')} — ${esc(s.title)} by ${esc(s.artist)} on DJ Musta</image:caption>
+    </image:image>` : '';
                 return `  <url>
     <loc>${songUrl}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.8</priority>${imageTag}
   </url>`;
             }).join('\n');
 
             const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
 ${staticUrls}
 ${songUrls}
 </urlset>`;

@@ -18,6 +18,9 @@ https://djmusta.pages.dev/* https://djmusta.com/:splat 301
 /404.html /404.html 200
 /offline.html /offline.html 200
 
+# Sitemap — proxy to backend so Google gets live song list
+/sitemap.xml https://mustabackend-nenb.onrender.com/sitemap.xml 200
+
 # Song pretty URLs - serve index.html so song-router.js can handle them
 /song/* /index.html 200
 

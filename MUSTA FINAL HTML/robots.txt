@@ -9,18 +9,28 @@ Allow: /new-music
 Allow: /top-songs
 Allow: /top-artists
 Allow: /nonstops
+Allow: /sitemap.xml
 
-# Block private/admin areas
-Disallow: /api/
+# Block private/admin areas only
+Disallow: /api/admin
 Disallow: /admin
 Disallow: /admin/
-Disallow: /*.json$
+Disallow: /uploads/
 
-# Allow specific bots full access
+# Allow all major crawlers full access
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
 Allow: /
 
 # Sitemap location
