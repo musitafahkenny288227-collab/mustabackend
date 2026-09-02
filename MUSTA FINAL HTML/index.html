@@ -1005,19 +1005,7 @@
         padding-bottom: 8px !important;
         align-items: start !important;
       }
-      .music-grid::-webkit-scrollbar { display: none !important; }
-
-      /* All Songs grid — NEVER horizontal scroll, always multi-column */
-      #songsGrid,
-      #songsGrid.music-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-        grid-auto-flow: row !important;
-        grid-template-rows: none !important;
-        overflow-x: unset !important;
-        overflow-y: unset !important;
-        overflow: visible !important;
-        scrollbar-width: auto !important;
-      }      #mobileNav {
+      .music-grid::-webkit-scrollbar { display: none !important; }      #mobileNav {
         display: flex !important;
         position: fixed;
         bottom: 0;
@@ -3886,7 +3874,7 @@ button, .song-card, .song-row, input, select, textarea {
     // ============================================================
     function showSkeletons() {
       songsGrid.className = 'music-grid';
-      songsGrid.style.cssText = 'display:grid;grid-auto-flow:row;overflow:visible;grid-template-rows:none';
+      songsGrid.style.cssText = '';
       songsGrid.innerHTML = Array(8).fill(`
         <div style="background:var(--card);border-radius:14px;overflow:hidden">
           <div class="skeleton-card" style="aspect-ratio:1/1"></div>
@@ -3978,12 +3966,7 @@ button, .song-card, .song-row, input, select, textarea {
 
       if (!append) {
         songsGrid.className = currentView === 'grid' ? 'music-grid' : 'music-list';
-        // Force grid layout — override any mobile horizontal-scroll CSS
-        if (currentView === 'grid') {
-          songsGrid.style.cssText = 'display:grid;grid-auto-flow:row;overflow:visible;grid-template-rows:none';
-        } else {
-          songsGrid.style.cssText = '';
-        }
+        songsGrid.style.cssText = '';
         songsGrid.innerHTML = currentView === 'list'
           ? '<div class="music-list-header"><span>#</span><span></span><span>Song and artist</span><span>Length</span><span>Actions</span></div>'
           : '';
