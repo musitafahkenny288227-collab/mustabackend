@@ -211,9 +211,9 @@
 
   <!-- Preload critical font to reduce FCP -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet"></noscript>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=optional">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=optional" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=optional" rel="stylesheet"></noscript>
 
   <style>
     /* ===== RESET & BASE ===== */
@@ -237,6 +237,11 @@
     .image-wrapper, .card-img-wrap { aspect-ratio: 1/1; overflow: hidden; }
     /* Skeleton cards keep size */
     .skeleton-card { aspect-ratio: 1/1; }
+    /* Reserve minimum height for song grids to prevent CLS when cards load */
+    #songsGrid, .music-grid { min-height: 320px; }
+    /* Hero carousel images — reserve height to prevent CLS */
+    .hero-section .album-card { aspect-ratio: 4/3; }
+    .hero-section .album-card img { width: 100%; height: 100%; object-fit: cover; }
     /* ── CONTRAST FIXES: improve text readability ── */
     /* Ensure muted text meets WCAG AA (4.5:1 minimum) */
     .card-artist, .artist-name, .song-row .muted,
@@ -1049,7 +1054,7 @@
 <body>
 
   <!-- ===== LOADING / SPLASH SCREEN ===== -->
-  <div id="splashScreen" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a0e1a 0%,#0f1629 50%,#1a0a2e 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s ease,visibility .6s ease">
+  <div id="splashScreen" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a0e1a 0%,#0f1629 50%,#1a0a2e 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s ease,visibility .6s ease;will-change:opacity;contain:strict;transform:translateZ(0)">
 
     <!-- Glowing logo -->
     <div style="margin-bottom:28px;text-align:center">
@@ -2886,16 +2891,20 @@
             `<div class="sc-eq"><span></span><span></span><span></span></div>` :
             '▶';
           return `
-            <div class="song-card${isPlaying ? ' playing' : ''}" id="card-${s.id}" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}">
+            <div class="song-card${isPlaying ? ' playing' : ''}" id="card-${s.id}" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}" itemscope itemtype="https://schema.org/MusicRecording">
+              <meta itemprop="name" content="${esc(s.title)}">
+              <meta itemprop="byArtist" content="${esc(s.artist)}">
+              ${s.genre ? `<meta itemprop="genre" content="${esc(s.genre)}">` : ''}
+              ${s.release_date ? `<meta itemprop="datePublished" content="${esc(s.release_date)}">` : ''}
               <div class="image-wrapper">
-                <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+                <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" loading="lazy" width="200" height="200" itemprop="image" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
                 ${genreLabel}
                 <button class="sc-like${likeClass}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like">♥</button>
                 <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})" aria-label="Play ${esc(s.title)}">${playIcon}</button>
               </div>
               <div class="card-details">
-                <div class="song-title">${esc(s.title)}</div>
-                <div class="artist-name">${esc(formatArtistNames(s.artist))}${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</div>
+                <div class="song-title" itemprop="name">${esc(s.title)}</div>
+                <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(formatArtistNames(s.artist))}</span>${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</div>
                 <div class="card-actions-row">
                   <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play">▶</button>
                   <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
@@ -2940,7 +2949,7 @@
         const imageUrl = cover ? imgSrc(cover) : 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=300&fit=crop';
         return `
           <div class="album-card" onclick="playSong(${song.id})">
-            <img src="${imageUrl}" alt="${esc(song.artist)}" onerror="this.src='https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=300&fit=crop'">
+            <img src="${imageUrl}" alt="${esc(song.artist)}" width="400" height="300" onerror="this.src='https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=300&fit=crop'">
             <div class="album-overlay">
               <div class="album-info">
                 <div class="artist">${esc(song.artist)}</div>
@@ -3880,16 +3889,20 @@
       }
       grid.className = 'music-grid';
       grid.innerHTML = songs.map(s => `
-        <div class="song-card" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}">
+        <div class="song-card" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}" itemscope itemtype="https://schema.org/MusicRecording">
+          <meta itemprop="name" content="${esc(s.title)}">
+          <meta itemprop="byArtist" content="${esc(s.artist)}">
+          ${s.genre ? `<meta itemprop="genre" content="${esc(s.genre)}">` : ''}
+          ${s.release_date ? `<meta itemprop="datePublished" content="${esc(s.release_date)}">` : ''}
           <div class="image-wrapper">
-            <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)} by ${esc(s.artist)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
+            <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)} by ${esc(s.artist)}" loading="lazy" width="200" height="200" itemprop="image" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             ${s.genre ? `<span class="sc-genre">${esc(s.genre)}</span>` : ''}
             <button class="sc-like${s.liked ? ' liked' : ''}" onclick="event.stopPropagation();toggleLike(${s.id},this)" title="Like">♥</button>
             <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
           </div>
           <div class="card-details">
-            <div class="song-title">${esc(s.title)}</div>
-            <div class="artist-name">${esc(s.artist)}</div>
+            <div class="song-title" itemprop="name">${esc(s.title)}</div>
+            <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(s.artist)}</span></div>
             <div class="card-actions-row">
               <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
               <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
