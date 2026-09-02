@@ -3345,6 +3345,7 @@ button, .song-card, .song-row, input, select, textarea {
     // ============================================================
     function showSkeletons() {
       songsGrid.className = 'music-grid';
+      songsGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))!important;grid-auto-flow:row!important;overflow:visible!important';
       songsGrid.innerHTML = Array(8).fill(`
         <div style="background:var(--card);border-radius:14px;overflow:hidden">
           <div class="skeleton-card" style="aspect-ratio:1/1"></div>
@@ -3436,6 +3437,12 @@ button, .song-card, .song-row, input, select, textarea {
 
       if (!append) {
         songsGrid.className = currentView === 'grid' ? 'music-grid' : 'music-list';
+        // Force grid layout — override any mobile horizontal-scroll CSS
+        if (currentView === 'grid') {
+          songsGrid.style.cssText = 'display:grid!important;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))!important;grid-auto-flow:row!important;overflow:visible!important;grid-template-rows:none!important';
+        } else {
+          songsGrid.style.cssText = '';
+        }
         songsGrid.innerHTML = currentView === 'list'
           ? '<div class="music-list-header"><span>#</span><span></span><span>Song and artist</span><span>Length</span><span>Actions</span></div>'
           : '';
