@@ -994,12 +994,16 @@
       }
       .music-grid::-webkit-scrollbar { display: none !important; }
 
-      /* All Songs grid always shows multi-column on mobile too */
-      #songsGrid {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+      /* All Songs grid — NEVER horizontal scroll, always multi-column */
+      #songsGrid,
+      #songsGrid.music-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
         grid-auto-flow: row !important;
-        overflow-x: visible !important;
-        overflow-y: visible !important;
+        grid-template-rows: none !important;
+        overflow-x: unset !important;
+        overflow-y: unset !important;
+        overflow: visible !important;
+        scrollbar-width: auto !important;
       }      #mobileNav {
         display: flex !important;
         position: fixed;
