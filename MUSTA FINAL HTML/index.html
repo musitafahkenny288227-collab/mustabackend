@@ -601,7 +601,7 @@
     .card-actions-row {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       margin-top: 8px;
     }
     .ca-btn {
@@ -617,38 +617,41 @@
     .ca-btn:active { transform: scale(0.9); }
     .ca-play {
       flex: 1;
-      height: 32px;
+      height: 28px;
       border-radius: 50px;
       background: linear-gradient(135deg, #00d4aa, #06b6d4);
       color: #000;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 800;
-      letter-spacing: .04em;
-      gap: 5px;
-      box-shadow: 0 3px 12px rgba(0,212,170,.3);
+      letter-spacing: .03em;
+      gap: 4px;
+      box-shadow: 0 3px 10px rgba(0,212,170,.3);
       border: none !important;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
     }
-    .ca-play:hover { box-shadow: 0 4px 18px rgba(0,212,170,.55); filter: brightness(1.1); }
+    .ca-play:hover { box-shadow: 0 4px 14px rgba(0,212,170,.5); filter: brightness(1.08); }
     .ca-dl {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       background: rgba(16,185,129,.08);
       color: #34d399;
-      font-size: 14px;
+      font-size: 13px;
       border: 1.5px solid rgba(16,185,129,.4) !important;
     }
-    .ca-dl:hover { background: rgba(16,185,129,.2); box-shadow: 0 0 10px rgba(16,185,129,.3); }
+    .ca-dl:hover { background: rgba(16,185,129,.2); box-shadow: 0 0 8px rgba(16,185,129,.3); }
     .ca-share {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       background: rgba(6,182,212,.08);
       color: #67e8f9;
-      font-size: 13px;
+      font-size: 12px;
       border: 1.5px solid rgba(6,182,212,.4) !important;
     }
-    .ca-share:hover { background: rgba(6,182,212,.2); box-shadow: 0 0 10px rgba(6,182,212,.3); }
+    .ca-share:hover { background: rgba(6,182,212,.2); box-shadow: 0 0 8px rgba(6,182,212,.3); }
 
     .sc-eq {
       display: inline-flex;
