@@ -6849,21 +6849,6 @@ button, .song-card, .song-row, input, select, textarea {
     // DJ Musta Featured section disabled by user request
     return;
   }
-    const cover=(typeof imgSrc==='function') ? imgSrc(s.cover_path || s.cover_image || '') : (s.cover_path || s.cover_image || '');
-    document.getElementById('dmSpotTitle').textContent=s.title || 'Featured Song';
-    document.getElementById('dmSpotArtist').textContent=s.artist || 'DJ Musta Music';
-    document.getElementById('dmSpotCover').src=cover || (window.DEFAULT_COVER || '');
-    const meta=[];
-    if(s.genre) meta.push(s.genre);
-    if(s.duration) meta.push('⏱ '+s.duration);
-    if(s.play_count!=null) meta.push('▶ '+Number(s.play_count).toLocaleString()+' plays');
-    document.getElementById('dmSpotMeta').innerHTML=meta.map(x=>'<span class="dm-meta-pill">'+escLocal(x)+'</span>').join('');
-    const play=()=>{ if(typeof playSong==='function') playSong(s.id); };
-    document.getElementById('dmSpotPlay').onclick=play;
-    document.getElementById('dmSpotArtPlay').onclick=play;
-    document.getElementById('dmSpotShare').onclick=()=>{ if(typeof openShare==='function') openShare(s.id,s.title,s.artist); };
-    wrap.style.display='grid';
-  }
   function addShelfControls(){
     const ids=['recentlyPlayedGrid','sponsoredGrid','verifiedArtistsGrid','officialTracksGrid','kadongo-grid','trending-today-grid','top-downloads-grid','relatedSongsGrid','songsGrid'];
     ids.forEach(id=>{
