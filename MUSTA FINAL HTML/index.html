@@ -575,34 +575,30 @@
       font-size: 13px;
       font-weight: 700;
       padding: 0;
-      height: 32px;
+      height: 30px;
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all .15s ease;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background: transparent !important;
     }
-    .ca-btn:active { transform: scale(0.92); opacity: .8; }
+    .ca-btn:active { transform: scale(0.92); }
     .ca-play {
-      background: rgba(168,85,247,.18);
       color: #d8b4fe;
-      border: 1px solid rgba(168,85,247,.3) !important;
+      border: 1px solid rgba(168,85,247,.45) !important;
     }
-    .ca-play:hover { background: rgba(168,85,247,.32); }
+    .ca-play:hover { border-color: rgba(168,85,247,.9) !important; color: #fff; }
     .ca-dl {
-      background: rgba(16,185,129,.12);
       color: #6ee7b7;
-      border: 1px solid rgba(16,185,129,.25) !important;
+      border: 1px solid rgba(16,185,129,.4) !important;
     }
-    .ca-dl:hover { background: rgba(16,185,129,.25); }
+    .ca-dl:hover { border-color: rgba(16,185,129,.85) !important; color: #fff; }
     .ca-share {
-      background: rgba(99,102,241,.12);
       color: #a5b4fc;
-      border: 1px solid rgba(99,102,241,.25) !important;
+      border: 1px solid rgba(99,102,241,.4) !important;
     }
-    .ca-share:hover { background: rgba(99,102,241,.25); }
+    .ca-share:hover { border-color: rgba(99,102,241,.85) !important; color: #fff; }
 
     .sc-eq {
       display: inline-flex;
