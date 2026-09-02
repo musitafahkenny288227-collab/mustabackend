@@ -235,11 +235,6 @@
     #audioPlayer { min-height: 0; }
     /* Song cards keep aspect ratio */
     .image-wrapper, .card-img-wrap { aspect-ratio: 1/1; overflow: hidden; }
-    /* Reserve space for hero so carousel load doesn't cause CLS */
-    .hero-section { height: 240px !important; min-height: 240px !important; }
-    @media (max-width: 768px) { .hero-section { height: 180px !important; min-height: 180px !important; } }
-    /* Reserve space for Song of Day so it doesn't push content when it appears */
-    #songOfDayWrap { min-height: 0; contain: layout; }
     /* Skeleton cards keep size */
     .skeleton-card { aspect-ratio: 1/1; }
     /* Hero carousel images — reserve height to prevent CLS */
