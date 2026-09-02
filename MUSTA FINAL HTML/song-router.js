@@ -116,11 +116,26 @@ class SongRouter {
             );
             document.title = `${song.title} by ${song.artist} | DJ Musta Music`;
             this.updateMetaTags(song.title, song.id);
-            // Wait for playSong to be available (page may still be loading)
+            // Wait for playSong AND the audio element to be ready before playing.
+            // The SPA may still be loading its song list when we arrive via redirect,
+            // so we also ensure the song is in window.songs before calling playSong.
             const tryPlay = (attempts = 0) => {
-                if (window.playSong) {
+                const playFnReady = typeof window.playSong === 'function';
+                // Consider player ready when either window.songs has loaded OR we've waited 3s
+                const playerReady = playFnReady && (attempts >= 10 || (window.songs && window.songs.length > 0));
+
+                if (playerReady) {
+                    // Make sure this song is in window.songs so playSong can find it
+                    if (!window.songs) window.songs = [];
+                    if (!window.songs.find(s => s.id === song.id)) {
+                        window.songs.unshift(song);
+                    }
+                    // Also ensure it's in the playlist so the player queue is valid
+                    if (window.playlist && !window.playlist.find(s => s.id === song.id)) {
+                        window.playlist.unshift(song);
+                    }
                     window.playSong(song.id);
-                } else if (attempts < 30) {
+                } else if (attempts < 50) {
                     setTimeout(() => tryPlay(attempts + 1), 300);
                 }
             };
@@ -201,10 +216,17 @@ class SongRouter {
                 this.navigateToSong(songId, song.title, true);
             }
             
-            // Play the song using existing function
-            if (window.playSong) {
-                window.playSong(songId);
-            }
+            // Play — wait for playSong to be ready and songs list to load
+            const tryPlay = (attempts = 0) => {
+                const playerReady = typeof window.playSong === 'function' &&
+                    (attempts >= 10 || (window.songs && window.songs.length > 0));
+                if (playerReady) {
+                    window.playSong(songId);
+                } else if (attempts < 50) {
+                    setTimeout(() => tryPlay(attempts + 1), 300);
+                }
+            };
+            tryPlay();
         } else {
             console.warn('Song not found:', songId);
         }
