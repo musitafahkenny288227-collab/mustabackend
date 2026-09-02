@@ -931,7 +931,7 @@
       }
       .music-grid {
         grid-template-columns: none !important;
-        grid-template-rows: 1fr !important;
+        grid-template-rows: auto !important;
         grid-auto-flow: column !important;
         grid-auto-columns: minmax(140px, 42vw) !important;
         overflow-x: auto !important;
@@ -939,6 +939,7 @@
         scrollbar-width: none !important;
         gap: 8px !important;
         padding-bottom: 8px !important;
+        align-items: start !important;
       }
       .music-grid::-webkit-scrollbar {
         display: none !important;
