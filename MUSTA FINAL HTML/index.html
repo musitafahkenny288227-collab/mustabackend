@@ -565,39 +565,55 @@
     .card-actions-row {
       display: flex;
       align-items: center;
-      gap: 5px;
-      margin-top: 4px;
+      gap: 6px;
+      margin-top: 6px;
     }
     .ca-btn {
       border: none;
-      border-radius: 6px;
+      border-radius: 50px;
       cursor: pointer;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 5px 8px;
-      transition: opacity .15s, transform .15s;
-      min-height: 28px;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 6px 10px;
+      transition: all .18s cubic-bezier(.4,0,.2,1);
+      min-height: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 4px;
+      letter-spacing: .02em;
     }
-    .ca-btn:hover { opacity: .85; transform: translateY(-1px); }
+    .ca-btn:active { transform: scale(0.93); }
     .ca-play {
-      background: var(--pink);
+      background: linear-gradient(135deg, #a855f7, #6366f1);
       color: white;
       flex: 1;
+      box-shadow: 0 3px 10px rgba(168,85,247,.35);
     }
+    .ca-play:hover { box-shadow: 0 5px 16px rgba(168,85,247,.55); transform: translateY(-1px); }
     .ca-dl {
-      background: rgba(16,185,129,.15);
+      background: rgba(16,185,129,.18);
       color: #34d399;
-      border: 1px solid rgba(16,185,129,.3) !important;
+      border: 1.5px solid rgba(16,185,129,.4) !important;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 50% !important;
+      flex-shrink: 0;
     }
+    .ca-dl:hover { background: rgba(16,185,129,.32); transform: translateY(-1px); }
     .ca-share {
-      background: rgba(168,85,247,.12);
-      color: #c084fc;
-      border: 1px solid rgba(168,85,247,.25) !important;
+      background: rgba(99,102,241,.18);
+      color: #818cf8;
+      border: 1.5px solid rgba(99,102,241,.35) !important;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 50% !important;
       font-size: 13px;
+      flex-shrink: 0;
     }
+    .ca-share:hover { background: rgba(99,102,241,.32); transform: translateY(-1px); }
 
     .sc-eq {
       display: inline-flex;
@@ -2910,7 +2926,7 @@
                 <div class="song-title" itemprop="name">${esc(s.title)}</div>
                 <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(formatArtistNames(s.artist))}</span>${s.uploader_verified === 'approved' ? ' <span style="color:#3b82f6;font-size:9px">✓</span>' : ''}</div>
                 <div class="card-actions-row">
-                  <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play">▶</button>
+                  <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})" title="Play">▶ Play</button>
                   <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
                   <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share song link">🔗</button>
                 </div>
@@ -4040,7 +4056,7 @@
             <div class="song-title" itemprop="name">${esc(s.title)}</div>
             <div class="artist-name" itemprop="byArtist" itemscope itemtype="https://schema.org/MusicGroup"><span itemprop="name">${esc(s.artist)}</span></div>
             <div class="card-actions-row">
-              <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
+              <button class="ca-btn ca-play" onclick="event.stopPropagation();playSong(${s.id})">▶ Play</button>
               <button class="ca-btn ca-dl" onclick="event.stopPropagation();downloadSong(${s.id},'${esc(s.title)}','${esc(s.file_path)}')" title="Download">⬇</button>
               <button class="ca-btn ca-share" onclick="event.stopPropagation();openShare(${s.id},'${esc(s.title)}','${esc(s.artist)}')" title="Share">🔗</button>
             </div>
