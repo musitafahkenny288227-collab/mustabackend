@@ -880,20 +880,21 @@
         padding-bottom: 180px;
       }
 
-      /* ── Prevent ANY horizontal scroll on mobile ── */
-      body, #app, main, .hero-section,
-      .dm-quickbar, #dmDiscoveryIntro {
-        max-width: 100vw !important;
-        overflow-x: hidden !important;
-      }
-      #musicSections, #songsSection {
-        max-width: 100vw !important;
-        overflow-x: visible !important;
-      }
+      /* Only clip the hero carousel, not the whole page */
+      .hero-section,
       .hero-bg-carousel,
       .curved-banner-container {
         overflow: hidden !important;
-        max-width: 100vw !important;
+      }
+
+      /* Everything else must allow grid scroll */
+      body, main, #discover-feed,
+      #musicSections, #songsSection,
+      #verifiedArtistsWrap, #officialTracksWrap,
+      #trending-today-wrap, #top-downloads-wrap,
+      #sponsoredWrap, #recentlyPlayedWrap,
+      #relatedSongsWrap, #kadongo-wrap {
+        overflow-x: visible !important;
       }
       #audioPlayer {
         bottom: 56px !important;
