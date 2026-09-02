@@ -412,6 +412,15 @@
       box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
       border-color: rgba(245, 158, 11, 0.38);
     }
+    .song-card:focus {
+      outline: 2px solid var(--pink);
+      outline-offset: 2px;
+      transform: translateY(-2px);
+    }
+    .song-card:focus-visible {
+      outline: 2px solid #a855f7;
+      outline-offset: 2px;
+    }
     .song-card.playing {
       outline: 2px solid var(--pink);
     }
@@ -2868,7 +2877,7 @@
             `<div class="sc-eq"><span></span><span></span><span></span></div>` :
             '▶';
           return `
-            <div class="song-card${isPlaying ? ' playing' : ''}" id="card-${s.id}" onclick="playSong(${s.id})">
+            <div class="song-card${isPlaying ? ' playing' : ''}" id="card-${s.id}" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}">
               <div class="image-wrapper">
                 <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
                 ${genreLabel}
@@ -3819,7 +3828,7 @@
         const g = document.getElementById('artistDetailSongs');
         g.className = 'music-grid';
         g.innerHTML = songs.length ? songs.map(s => `
-          <div class="song-card" onclick="playSong(${s.id})">
+          <div class="song-card" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}">
             <div class="image-wrapper">
               <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
               <button class="sc-play-overlay" onclick="event.stopPropagation();playSong(${s.id})">▶</button>
@@ -3861,7 +3870,7 @@
       }
       grid.className = 'music-grid';
       grid.innerHTML = songs.map(s => `
-        <div class="song-card" onclick="playSong(${s.id})">
+        <div class="song-card" onclick="playSong(${s.id})" role="button" tabindex="0" aria-label="Play ${esc(s.title)} by ${esc(s.artist)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playSong(${s.id})}">
           <div class="image-wrapper">
             <img src="${imgSrc(s.cover_path || s.cover_image)}" alt="${esc(s.title)} by ${esc(s.artist)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"/>
             ${s.genre ? `<span class="sc-genre">${esc(s.genre)}</span>` : ''}
