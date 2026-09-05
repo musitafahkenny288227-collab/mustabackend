@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // DJ MUSTA MUSIC - BACKEND SERVER
 // Node.js + PostgreSQL (Supabase)
 // Run: node server.js
@@ -531,10 +531,6 @@ async function initDB() {
     }
     // Add producer column if missing
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS producer TEXT DEFAULT ''`);
-    // OTP columns for admin 2FA
-    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code TEXT`);
-    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMPTZ`);
-    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_session TEXT`);
 
     // Seed admin - ensure musitafahkenny288227@gmail.com is admin
     // SECURITY: Use ADMIN_SEED_PASSWORD env var. Fallback only used on first-run
@@ -599,12 +595,6 @@ async function initDB() {
 // ============================================================
 // CRYPTO
 // ============================================================
-// OTP GENERATOR — 6-digit code for admin 2FA
-// ============================================================
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 function hashPassword(pw) {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.pbkdf2Sync(pw, salt, 10000, 64, 'sha512').toString('hex');
@@ -810,82 +800,6 @@ function indexOf(buf, search, start = 0) {
         if (found) return i;
     }
     return -1;
-}
-
-// ============================================================
-// AUTO COVER GENERATOR — creates a colorful SVG cover for songs
-// without a cover image
-// ============================================================
-function generateCoverSVG(title, artist, genre) {
-    // Pick colors based on genre
-    const genreColors = {
-        'Kadongo Kamu': ['#ff6b00', '#ff9a3d'],
-        'Gospel':       ['#22c55e', '#16a34a'],
-        'Afrobeat':     ['#eab308', '#f97316'],
-        'Dancehall':    ['#06b6d4', '#3b82f6'],
-        'Hip Hop':      ['#8b5cf6', '#ec4899'],
-        'R&B':          ['#ec4899', '#f43f5e'],
-        'Reggae':       ['#16a34a', '#eab308'],
-        'Nonstops':     ['#6366f1', '#a855f7'],
-        'Gospel':       ['#22c55e', '#3b82f6'],
-    };
-    const [c1, c2] = genreColors[genre] || ['#ff6b00', '#a855f7'];
-
-    // Truncate long text
-    const t = title.length > 20 ? title.substring(0, 18) + '…' : title;
-    const a = artist.length > 22 ? artist.substring(0, 20) + '…' : artist;
-    const g = genre || 'Music';
-
-    // Get initials for the big letter
-    const initial = title.charAt(0).toUpperCase();
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:${c1};stop-opacity:1"/>
-      <stop offset="100%" style="stop-color:${c2};stop-opacity:1"/>
-    </linearGradient>
-    <linearGradient id="overlay" x1="0%" y1="60%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#000;stop-opacity:0"/>
-      <stop offset="100%" style="stop-color:#000;stop-opacity:0.7"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Background gradient -->
-  <rect width="400" height="400" fill="url(#bg)"/>
-
-  <!-- Pattern overlay -->
-  <circle cx="320" cy="80" r="120" fill="rgba(255,255,255,0.08)"/>
-  <circle cx="80" cy="320" r="100" fill="rgba(0,0,0,0.12)"/>
-  <circle cx="200" cy="200" r="160" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2"/>
-
-  <!-- Big initial letter -->
-  <text x="200" y="230" font-family="Arial Black, Arial, sans-serif" font-size="180" font-weight="900"
-        text-anchor="middle" fill="rgba(255,255,255,0.15)">${initial}</text>
-
-  <!-- Dark overlay at bottom for text readability -->
-  <rect width="400" height="400" fill="url(#overlay)"/>
-
-  <!-- Music note icon -->
-  <text x="200" y="160" font-family="Arial" font-size="64" text-anchor="middle" fill="rgba(255,255,255,0.9)">🎵</text>
-
-  <!-- Song title -->
-  <text x="200" y="300" font-family="Arial, sans-serif" font-size="22" font-weight="700"
-        text-anchor="middle" fill="white">${t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</text>
-
-  <!-- Artist name -->
-  <text x="200" y="328" font-family="Arial, sans-serif" font-size="16" font-weight="400"
-        text-anchor="middle" fill="rgba(255,255,255,0.8)">${a.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</text>
-
-  <!-- Genre badge -->
-  <rect x="150" y="346" width="100" height="24" rx="12" fill="rgba(0,0,0,0.35)"/>
-  <text x="200" y="362" font-family="Arial, sans-serif" font-size="11" font-weight="600"
-        text-anchor="middle" fill="rgba(255,255,255,0.7)">${g.toUpperCase().replace(/&/g,'&amp;')}</text>
-
-  <!-- DJ Musta watermark -->
-  <text x="200" y="392" font-family="Arial, sans-serif" font-size="10"
-        text-anchor="middle" fill="rgba(255,255,255,0.4)">djmusta.com</text>
-</svg>`;
 }
 
 // ============================================================
@@ -1197,44 +1111,6 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 await query('UPDATE users SET profile_photo=$1 WHERE id=$2', [photoUrl, u.id]);
                 u.profile_photo = photoUrl;
             }
-
-            // ── ADMIN OTP CHECK ──────────────────────────────────────────
-            // If user is admin, require OTP verification before issuing token
-            if (u.is_admin) {
-                const otp = generateOTP();
-                const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-                const otpToken = crypto.randomBytes(32).toString('hex'); // session token for OTP flow
-                await query(
-                    'UPDATE users SET otp_code=$1, otp_expiry=$2, otp_session=$3 WHERE id=$4',
-                    [otp, otpExpiry, otpToken, u.id]
-                );
-                // Send OTP email
-                await sendEmail(u.email, '🔐 DJ Musta Admin Login Code', `
-                    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#0a0e1a;color:#e2e8f0;padding:32px;border-radius:14px">
-                        <div style="text-align:center;margin-bottom:24px">
-                            <div style="font-size:48px">🔐</div>
-                            <h2 style="color:#ff6b00;margin:12px 0 4px">Admin Login Verification</h2>
-                            <p style="color:#94a3b8;font-size:14px">DJ Musta Music — Admin Panel</p>
-                        </div>
-                        <div style="background:#141820;border-radius:12px;padding:24px;text-align:center;border:1px solid rgba(255,107,0,.2)">
-                            <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">Your one-time login code:</p>
-                            <div style="font-size:42px;font-weight:900;letter-spacing:12px;color:#ff6b00;font-family:monospace">${otp}</div>
-                            <p style="color:#64748b;font-size:12px;margin-top:12px">Expires in 10 minutes</p>
-                        </div>
-                        <p style="color:#64748b;font-size:12px;margin-top:20px;text-align:center">
-                            If you didn't try to log in, ignore this email. Your account is safe.
-                        </p>
-                    </div>
-                `);
-                console.log(`[OTP] Sent to admin ${u.email}`);
-                return J(200, {
-                    requiresOTP: true,
-                    otpSession: otpToken,
-                    message: `Verification code sent to ${u.email.replace(/(.{2}).*(@.*)/, '$1***$2')}`
-                });
-            }
-            // ── END ADMIN OTP CHECK ──────────────────────────────────────
-
             const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:!!u.is_admin });
             return J(200, { token:tkn, user:pub(u) });
         } else {
@@ -1248,34 +1124,6 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
             return J(201, { token:tkn, user:pub(u) });
         }
     }
-
-    // POST /api/auth/verify-otp - Verify 6-digit admin OTP and return real JWT
-    if (method === 'POST' && pathname === '/api/auth/verify-otp') {
-        if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Try again in 1 minute.' });
-        const { otpSession, otp } = await parseJSON(req);
-        if (!otpSession || !otp) return J(400, { error:'OTP session and code required' });
-        const r = await query(
-            'SELECT * FROM users WHERE otp_session=$1 AND is_admin=TRUE',
-            [otpSession]
-        );
-        if (!r.rows[0]) return J(401, { error:'Invalid or expired session. Please log in again.' });
-        const u = r.rows[0];
-        // Check expiry
-        if (!u.otp_expiry || new Date(u.otp_expiry) < new Date()) {
-            await query('UPDATE users SET otp_code=NULL, otp_expiry=NULL, otp_session=NULL WHERE id=$1', [u.id]);
-            return J(401, { error:'Code expired. Please log in again.' });
-        }
-        // Check code matches
-        if (u.otp_code !== String(otp).trim()) {
-            return J(401, { error:'Incorrect code. Please check your email and try again.' });
-        }
-        // OTP valid — clear it and issue real token
-        await query('UPDATE users SET otp_code=NULL, otp_expiry=NULL, otp_session=NULL WHERE id=$1', [u.id]);
-        const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:true });
-        console.log(`[OTP] Admin verified: ${u.email}`);
-        return J(200, { token:tkn, user:pub(u) });
-    }
-
     // â”€â”€ GET /api/stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     // POST /api/auth/forgot-password - Request password reset
@@ -1416,26 +1264,30 @@ if (method === 'GET' && pathname === '/api/songs') {
 
         // When searching, sort by relevance:
         // 1. Exact title match first
-        // When searching: relevance order using safe parameterized CASE
-        // caseParams are separate so COUNT query doesn't include them
+        // 2. Title starts with search term
+        // 3. Artist exact match
+        // 4. Most played (popularity tiebreaker)
         let order;
-        const caseParams = [];
         if (search) {
-            const sl = search.toLowerCase();
-            caseParams.push(sl);         // $idx   — exact match
-            caseParams.push(sl + '%');   // $idx+1 — starts-with
-            const ep = idx;
-            idx += 2;
-            order = `CASE WHEN LOWER(s.title)=$${ep} THEN 1 WHEN LOWER(s.title) LIKE $${ep+1} THEN 2 WHEN LOWER(s.artist)=$${ep} THEN 3 WHEN LOWER(s.artist) LIKE $${ep+1} THEN 4 ELSE 5 END, s.play_count DESC`;
+            const s = search.toLowerCase().replace(/'/g, "''"); // escape single quotes
+            order = `
+                CASE
+                    WHEN LOWER(s.title) = '${s}' THEN 1
+                    WHEN LOWER(s.title) LIKE '${s}%' THEN 2
+                    WHEN LOWER(s.artist) = '${s}' THEN 3
+                    WHEN LOWER(s.artist) LIKE '${s}%' THEN 4
+                    WHEN LOWER(s.title) LIKE '%${s}%' THEN 5
+                    ELSE 6
+                END, s.play_count DESC`;
         } else {
             order = orderMap[sortParam] || orderMap[category] || 'created_at DESC';
         }
 
-        // COUNT uses WHERE params only (not CASE params)
+        // Count query â€” no ORDER BY
         const total = await query(`SELECT COUNT(*) FROM songs ${where}`, params);
 
-        // Data query uses WHERE params + CASE params + LIMIT + OFFSET
-        const dataParams = [...params, ...caseParams, limit, offset];
+        // Data query â€” with ORDER BY, LIMIT, OFFSET
+        const dataParams = [...params, limit, offset];
         const songs = await query(
             `SELECT s.*, COALESCE(vr.status,'none') as uploader_verified FROM songs s LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved' WHERE ${where.replace("WHERE ","")} ORDER BY ${order} LIMIT $${idx} OFFSET $${idx+1}`,
             dataParams
@@ -1536,27 +1388,8 @@ if (method === 'GET' && pathname === '/api/songs') {
         let filePath, coverPath;
         const DEFAULT_COVER_URL = `${R2_PUBLIC_URL}/covers/default-cover.svg`;
         try {
-            filePath = await r2Upload(files.song, 'songs');
-            if (files.cover) {
-                coverPath = await r2Upload(files.cover, 'covers');
-            } else {
-                // Auto-generate a cover SVG with the artist name and song title
-                try {
-                    const svgCover = generateCoverSVG(title.trim(), artist.trim(), genre || 'Other');
-                    const svgBuffer = Buffer.from(svgCover, 'utf8');
-                    const safeTitle = title.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 30);
-                    const svgFileObj = {
-                        filename: `cover-${safeTitle}-${Date.now()}.svg`,
-                        mimetype: 'image/svg+xml',
-                        data: svgBuffer
-                    };
-                    coverPath = await r2Upload(svgFileObj, 'covers');
-                    console.log(`[AutoCover] Generated cover for: ${title} by ${artist}`);
-                } catch(e) {
-                    console.warn('[AutoCover] Failed, using default:', e.message);
-                    coverPath = DEFAULT_COVER_URL;
-                }
-            }
+            filePath  = await r2Upload(files.song,  'songs');
+            coverPath = files.cover ? await r2Upload(files.cover, 'covers') : DEFAULT_COVER_URL;
         } catch(e) {
             console.error('[R2 upload failed]', e.message);
             return J(500, { error: 'File upload failed: ' + e.message + '. Please check R2 configuration.' });
@@ -2109,32 +1942,6 @@ if (method === 'GET' && pathname === '/api/songs') {
         return J(200, { success:true, photoUrl: savedPhotoUrl, photo_url: savedPhotoUrl });
     }
 
-    // POST /api/admin/migrate-artist-photos - Migrate base64 photos to R2 (admin only, run once)
-    if (method === 'POST' && pathname === '/api/admin/migrate-artist-photos') {
-        if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        try {
-            const artists = await query(`SELECT id, name, photo_url FROM artists WHERE photo_url LIKE 'data:%'`);
-            let migrated = 0, failed = 0;
-            for (const a of artists.rows) {
-                try {
-                    const match = a.photo_url.match(/^data:([^;]+);base64,(.+)$/);
-                    if (!match) { failed++; continue; }
-                    const mime = match[1];
-                    const ext  = mime.split('/')[1] || 'jpg';
-                    const data = Buffer.from(match[2], 'base64');
-                    const safeArtist = a.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                    const fileObj = { filename: `artist-${safeArtist}-migrated.${ext}`, mimetype: mime, data };
-                    const r2Url = await r2Upload(fileObj, 'artists');
-                    await query('UPDATE artists SET photo_url=$1 WHERE id=$2', [r2Url, a.id]);
-                    migrated++;
-                } catch(e) { failed++; }
-            }
-            return J(200, { success:true, migrated, failed, total: artists.rows.length });
-        } catch(e) {
-            return J(500, { error: 'Migration failed: ' + e.message });
-        }
-    }
-
     // POST /api/artists/photo - Upload artist photo as base64 (admin only)
     if (method === 'POST' && pathname === '/api/artists/photo') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
@@ -2163,19 +1970,17 @@ if (method === 'GET' && pathname === '/api/songs') {
                 return J(400, { error:'Invalid file type. Use JPG, PNG, or WebP.' });
             }
 
-            // Upload to R2 instead of storing as base64 in DB
-            const safeArtistName = artistName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            photo.filename = `artist-${safeArtistName}-${Date.now()}.${mime.split('/')[1] || 'jpg'}`;
-            const photoUrl = await r2Upload(photo, 'artists');
+            const base64 = photo.data.toString('base64');
+            const dataUrl = `data:${mime};base64,${base64}`;
 
             const existing = await query('SELECT id FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
             if (existing.rows.length) {
-                await query('UPDATE artists SET photo_url=$1 WHERE LOWER(name)=LOWER($2)', [photoUrl, artistName]);
+                await query('UPDATE artists SET photo_url=$1 WHERE LOWER(name)=LOWER($2)', [dataUrl, artistName]);
             } else {
-                await query('INSERT INTO artists (name, photo_url) VALUES ($1,$2)', [artistName, photoUrl]);
+                await query('INSERT INTO artists (name, photo_url) VALUES ($1,$2)', [artistName, dataUrl]);
             }
-            console.log(`[Artist Photo] Uploaded to R2 for: ${artistName} → ${photoUrl}`);
-            return J(200, { success:true, photoUrl, photo_url: photoUrl });
+            console.log(`[Artist Photo] Uploaded photo for: ${artistName} (${Math.round(photo.data.length/1024)}KB)`);
+            return J(200, { success:true, photoUrl: dataUrl, photo_url: dataUrl });
         } catch(err) {
             console.error('[Artist Photo] Error:', err);
             return J(500, { error:'Upload failed: ' + err.message });
