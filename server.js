@@ -1262,23 +1262,27 @@ if (method === 'GET' && pathname === '/api/songs') {
             likes: 'like_count DESC'
         };
 
-        // When searching, sort by relevance:
-        // 1. Exact title match first
-        // 2. Title starts with search term
-        // 3. Artist exact match
-        // 4. Most played (popularity tiebreaker)
+        // When searching, sort by relevance using parameterized CASE (no string interpolation)
         let order;
         if (search) {
-            const s = search.toLowerCase().replace(/'/g, "''"); // escape single quotes
+            const exact  = `$${idx}`;
+            const starts = `$${idx+1}`;
+            const fuzzy  = `$${idx+2}`;
+            params.push(
+                search.toLowerCase(),            // $idx   exact
+                search.toLowerCase() + '%',      // $idx+1 starts-with
+                '%' + search.toLowerCase() + '%' // $idx+2 fuzzy
+            );
             order = `
                 CASE
-                    WHEN LOWER(s.title) = '${s}' THEN 1
-                    WHEN LOWER(s.title) LIKE '${s}%' THEN 2
-                    WHEN LOWER(s.artist) = '${s}' THEN 3
-                    WHEN LOWER(s.artist) LIKE '${s}%' THEN 4
-                    WHEN LOWER(s.title) LIKE '%${s}%' THEN 5
+                    WHEN LOWER(s.title) = ${exact} THEN 1
+                    WHEN LOWER(s.title) LIKE ${starts} THEN 2
+                    WHEN LOWER(s.artist) = ${exact} THEN 3
+                    WHEN LOWER(s.artist) LIKE ${starts} THEN 4
+                    WHEN LOWER(s.title) LIKE ${fuzzy} THEN 5
                     ELSE 6
                 END, s.play_count DESC`;
+            idx += 3;
         } else {
             order = orderMap[sortParam] || orderMap[category] || 'created_at DESC';
         }
@@ -2625,6 +2629,206 @@ if (method === 'GET' && pathname === '/api/songs') {
         if (!user?.isAdmin) return J(403, { error: 'Admin only' });
         const r = await query('SELECT COUNT(*) as count FROM push_subscriptions');
         return J(200, { count: parseInt(r.rows[0].count) });
+    }
+
+    // ============================================================
+    // MOBILE MONEY / PAYMENT ROUTES (Flutterwave)
+    // ============================================================
+
+    // POST /api/payment/initiate — start a mobile money charge
+    if (method === 'POST' && pathname === '/api/payment/initiate') {
+        const FLW_SECRET = process.env.FLW_SECRET_KEY;
+        if (!FLW_SECRET || FLW_SECRET.includes('your-key')) return J(503, { error: 'Payments not configured. Set FLW_SECRET_KEY on Render.' });
+        const { amount, phone, network, email, fullname, paymentType } = await parseJSON(req);
+        if (!amount || !phone || !network || !email) return J(400, { error: 'amount, phone, network, email required' });
+        const clean = phone.replace(/\D/g, '');
+        if (!clean.startsWith('256') || clean.length !== 12) return J(400, { error: 'Invalid Uganda phone number. Use format: 256780123456' });
+        const txRef = `DJMUSTA-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+        const payload = JSON.stringify({
+            tx_ref: txRef, amount, currency: 'UGX',
+            email, phone_number: clean, fullname: fullname || 'DJ Musta User',
+            network: network.toUpperCase(),
+            redirect_url: `${SITE_URL}/payment/callback`,
+            meta: { payment_type: paymentType || 'general', user_id: user?.id || null }
+        });
+        return new Promise(resolve => {
+            const req2 = https.request({
+                hostname: 'api.flutterwave.com', path: '/v3/charges?type=mobile_money_uganda', method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${FLW_SECRET}`, 'Content-Length': Buffer.byteLength(payload) }
+            }, res2 => {
+                let d = '';
+                res2.on('data', c => d += c);
+                res2.on('end', () => {
+                    try {
+                        const body = JSON.parse(d);
+                        if (body.status === 'success') {
+                            console.log(`[Payment] Initiated: ${txRef} | ${amount} UGX | ${paymentType}`);
+                            resolve(J(200, { success: true, reference: txRef, message: body.message || 'Approve on your phone', data: body.data }));
+                        } else {
+                            resolve(J(400, { error: body.message || 'Payment initiation failed' }));
+                        }
+                    } catch(e) { resolve(J(500, { error: 'Payment gateway error' })); }
+                });
+            });
+            req2.on('error', e => resolve(J(500, { error: 'Payment request failed: ' + e.message })));
+            req2.write(payload);
+            req2.end();
+        });
+    }
+
+    // POST /api/payment/verify — verify a transaction
+    if (method === 'POST' && pathname === '/api/payment/verify') {
+        const FLW_SECRET = process.env.FLW_SECRET_KEY;
+        if (!FLW_SECRET || FLW_SECRET.includes('your-key')) return J(503, { error: 'Payments not configured' });
+        const { transaction_id, tx_ref } = await parseJSON(req);
+        if (!transaction_id && !tx_ref) return J(400, { error: 'transaction_id or tx_ref required' });
+        const endpoint = transaction_id ? `/v3/transactions/${transaction_id}/verify` : `/v3/transactions?tx_ref=${tx_ref}`;
+        return new Promise(resolve => {
+            const req2 = https.request({
+                hostname: 'api.flutterwave.com', path: endpoint, method: 'GET',
+                headers: { 'Authorization': `Bearer ${FLW_SECRET}` }
+            }, res2 => {
+                let d = '';
+                res2.on('data', c => d += c);
+                res2.on('end', async () => {
+                    try {
+                        const body = JSON.parse(d);
+                        const txData = body.data?.data?.[0] || body.data;
+                        if (body.status === 'success' && txData?.status === 'successful') {
+                            // Auto-grant premium if payment type matches
+                            if (user && txData.meta?.payment_type?.includes('PREMIUM')) {
+                                await query('UPDATE users SET is_premium=TRUE, premium_since=NOW() WHERE id=$1', [user.id]);
+                                await query('INSERT INTO notifications (user_id,type,title,message) VALUES ($1,$2,$3,$4)',
+                                    [user.id, 'premium', '👑 Premium Activated!', 'Your payment was successful. Premium features are now active!']);
+                            }
+                            resolve(J(200, { success: true, status: 'successful', data: txData }));
+                        } else {
+                            resolve(J(200, { success: false, status: txData?.status || 'pending', data: txData }));
+                        }
+                    } catch(e) { resolve(J(500, { error: 'Verification error' })); }
+                });
+            });
+            req2.on('error', e => resolve(J(500, { error: 'Verification request failed: ' + e.message })));
+            req2.end();
+        });
+    }
+
+    // POST /api/payment/webhook — Flutterwave webhook
+    if (method === 'POST' && pathname === '/api/payment/webhook') {
+        const FLW_HASH = process.env.FLW_SECRET_HASH;
+        const signature = req.headers['verif-hash'];
+        if (!FLW_HASH || signature !== FLW_HASH) {
+            console.warn('[Payment Webhook] Invalid signature');
+            res.writeHead(401); res.end(); return;
+        }
+        const event = await parseJSON(req);
+        if (event.event === 'charge.completed' && event.data?.status === 'successful') {
+            const meta = event.data.meta || {};
+            const userId = meta.user_id;
+            const paymentType = meta.payment_type || '';
+            console.log(`[Payment Webhook] Successful: ${event.data.tx_ref} | ${event.data.amount} UGX | type: ${paymentType}`);
+            if (userId && paymentType.includes('PREMIUM')) {
+                await query('UPDATE users SET is_premium=TRUE, premium_since=NOW() WHERE id=$1', [userId]).catch(() => {});
+                await query('INSERT INTO notifications (user_id,type,title,message) VALUES ($1,$2,$3,$4)',
+                    [userId, 'premium', '👑 Premium Activated!', 'Your mobile money payment was confirmed. Enjoy premium features!']).catch(() => {});
+            }
+        }
+        res.writeHead(200); res.end('ok'); return;
+    }
+
+    // GET /api/payment/types — list available payment options
+    if (method === 'GET' && pathname === '/api/payment/types') {
+        return JC(200, {
+            types: [
+                { id: 'PREMIUM_MONTHLY', label: 'Premium (1 Month)', amount: 10000, currency: 'UGX' },
+                { id: 'PREMIUM_YEARLY',  label: 'Premium (1 Year)',  amount: 100000, currency: 'UGX' },
+                { id: 'ARTIST_TIP',      label: 'Tip an Artist',     amount: 5000,  currency: 'UGX' },
+                { id: 'FEATURED_SONG',   label: 'Feature a Song (7 days)', amount: 50000, currency: 'UGX' }
+            ],
+            networks: ['MTN', 'AIRTEL']
+        }, 300);
+    }
+
+    // ── GET /api/auth/verify/:token ─────────────────────────────
+    if (method === 'GET' && seg[0]==='auth' && seg[1]==='verify' && seg[2]) {
+        const verifyToken = seg[2];
+        const r = await query('SELECT * FROM users WHERE verify_token=$1', [verifyToken]);
+        if (!r.rows[0]) return J(400, { error: 'Invalid or expired verification link' });
+        if (r.rows[0].verify_token_expiry && new Date(r.rows[0].verify_token_expiry) < new Date())
+            return J(400, { error: 'Verification link has expired. Please request a new one.' });
+        await query('UPDATE users SET is_verified=TRUE, verify_token=NULL, verify_token_expiry=NULL WHERE id=$1', [r.rows[0].id]);
+        return J(200, { success: true, message: 'Email verified successfully!' });
+    }
+
+    // ── DMCA / COPYRIGHT REPORTS ─────────────────────────────────
+    // GET /api/copyright/reports - List all DMCA reports (admin)
+    if (method === 'GET' && pathname === '/api/copyright/reports') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        try {
+            await query(`CREATE TABLE IF NOT EXISTS dmca_reports (
+                id SERIAL PRIMARY KEY,
+                song_id INTEGER REFERENCES songs(id) ON DELETE SET NULL,
+                reporter_name TEXT NOT NULL,
+                reporter_email TEXT NOT NULL,
+                rights_description TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                admin_notes TEXT DEFAULT '',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                resolved_at TIMESTAMPTZ
+            )`);
+        } catch(e) {}
+        const r = await query(`SELECT dr.*, s.title as song_title, s.artist as song_artist
+            FROM dmca_reports dr LEFT JOIN songs s ON dr.song_id=s.id
+            ORDER BY dr.created_at DESC`);
+        return J(200, { reports: r.rows });
+    }
+
+    // POST /api/copyright/report - Submit a DMCA report
+    if (method === 'POST' && pathname === '/api/copyright/report') {
+        try {
+            await query(`CREATE TABLE IF NOT EXISTS dmca_reports (
+                id SERIAL PRIMARY KEY,
+                song_id INTEGER REFERENCES songs(id) ON DELETE SET NULL,
+                reporter_name TEXT NOT NULL,
+                reporter_email TEXT NOT NULL,
+                rights_description TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                admin_notes TEXT DEFAULT '',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                resolved_at TIMESTAMPTZ
+            )`);
+        } catch(e) {}
+        const body = await parseJSON(req);
+        const { song_id, reporter_name, reporter_email, rights_description } = body;
+        if (!reporter_name || !reporter_email || !rights_description)
+            return J(400, { error: 'reporter_name, reporter_email, and rights_description are required' });
+        const r = await query(
+            `INSERT INTO dmca_reports (song_id, reporter_name, reporter_email, rights_description)
+             VALUES ($1,$2,$3,$4) RETURNING *`,
+            [song_id || null, reporter_name.trim(), reporter_email.trim(), rights_description.trim()]
+        );
+        // Notify admin
+        await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
+            ['dmca', `🚨 DMCA Report - ${reporter_name}`,
+             `New copyright report from ${reporter_email}. Song ID: ${song_id || 'N/A'}`]);
+        return J(201, { success: true, report: r.rows[0] });
+    }
+
+    // PATCH /api/copyright/reports/:id - Resolve a DMCA report (admin)
+    if (method === 'PATCH' && seg[0]==='copyright' && seg[1]==='reports' && seg[2]) {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const { status, admin_notes, remove_song } = await parseJSON(req);
+        await query(
+            `UPDATE dmca_reports SET status=$1, admin_notes=$2, resolved_at=NOW() WHERE id=$3`,
+            [status || 'resolved', admin_notes || '', seg[2]]
+        );
+        if (remove_song) {
+            const rep = await query('SELECT song_id FROM dmca_reports WHERE id=$1', [seg[2]]);
+            if (rep.rows[0]?.song_id) {
+                await query('DELETE FROM songs WHERE id=$1', [rep.rows[0].song_id]);
+            }
+        }
+        return J(200, { success: true });
     }
 
     J(404, { error:'Endpoint not found' });
