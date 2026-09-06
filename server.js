@@ -577,6 +577,8 @@ async function initDB() {
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsor_name TEXT DEFAULT \'\'');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_image TEXT');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS video_url TEXT DEFAULT \'\'');
+        // Fix songs that have NULL release_year — default them to 2026
+        await query(`UPDATE songs SET release_year = 2026 WHERE release_year IS NULL`);
         console.log('✅ User columns updated');
     } catch(e) {
         console.log('⚠️ Column update skipped');
@@ -1246,9 +1248,10 @@ if (method === 'GET' && pathname === '/api/songs') {
         }
 
         // Filter by release year (e.g. release_year=2026 for new songs only)
+        // Also includes songs created in the last 30 days regardless of release_year (handles NULL)
         const releaseYearFilter = q.get('release_year') || '';
         if (releaseYearFilter && !isNaN(parseInt(releaseYearFilter))) {
-            where += ` AND release_year >= $${idx}`;
+            where += ` AND (release_year >= $${idx} OR (release_year IS NULL AND created_at > NOW() - INTERVAL '30 days'))`;
             params.push(parseInt(releaseYearFilter));
             idx++;
         }
@@ -2962,6 +2965,20 @@ if (method === 'GET' && pathname === '/api/songs') {
             message: 'Song uploaded! It will go live after admin review (usually within 24 hours).',
             song: newSong
         });
+    }
+
+    // ── GET /api/songs/og/:id — ultra-fast OG meta for Worker ──────
+    // Returns only title, artist, cover — used by Cloudflare Worker for fast OG tags
+    if (method === 'GET' && seg[0]==='songs' && seg[1]==='og' && seg[2]) {
+        const r = await query('SELECT id,title,artist,cover_image,cover_path,genre,release_year,play_count FROM songs WHERE id=$1 AND approved=TRUE', [seg[2]]);
+        if (!r.rows[0]) return J(404, { error:'Not found' });
+        const s = r.rows[0];
+        const cover = s.cover_image || s.cover_path || '';
+        return JC(200, {
+            id: s.id, title: s.title, artist: s.artist,
+            cover: cover.startsWith('http') ? cover : cover ? `${SITE_URL}${cover}` : '',
+            genre: s.genre, year: s.release_year, plays: s.play_count
+        }, 3600); // cache for 1 hour
     }
 
     // ── GET /api/auth/verify/:token ─────────────────────────────
