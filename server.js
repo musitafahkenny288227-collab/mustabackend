@@ -576,6 +576,7 @@ async function initDB() {
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsored_until TIMESTAMPTZ');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsor_name TEXT DEFAULT \'\'');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_image TEXT');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS video_url TEXT DEFAULT \'\'');
         console.log('✅ User columns updated');
     } catch(e) {
         console.log('⚠️ Column update skipped');
@@ -1615,7 +1616,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
         const allowed = ['title','artist','genre','duration','lyrics','release_year',
-                         'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer'];
+                         'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer','video_url'];
         const sets = []; const vals = [];
         for (const key of allowed) {
             if (body[key] !== undefined) { vals.push(body[key]); sets.push(key+'=$'+vals.length); }
@@ -2747,6 +2748,220 @@ if (method === 'GET' && pathname === '/api/songs') {
             ],
             networks: ['MTN', 'AIRTEL']
         }, 300);
+    }
+
+    // ============================================================
+    // RINGTONE DOWNLOAD — streams first 30 seconds of audio
+    // ============================================================
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='ringtone') {
+        const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
+        if (!r.rows[0]) return J(404, { error:'Song not found' });
+        const song = r.rows[0];
+        const fileUrl = song.file_path;
+        if (!fileUrl) return J(404, { error:'No audio file' });
+
+        const cleanTitle  = song.title.replace(/[^a-zA-Z0-9\s\-_]/g,'').trim().replace(/\s+/g,'_') || 'ringtone';
+        const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g,'').trim().replace(/\s+/g,'_') || 'djmusta';
+        const filename    = `${cleanTitle}_${cleanArtist}_ringtone_djmusta.mp3`;
+
+        // Track as a download
+        await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]).catch(()=>{});
+
+        // Handle local legacy files
+        if (!fileUrl.startsWith('http')) {
+            const localPath = path.join(__dirname, '..', fileUrl);
+            if (!fs.existsSync(localPath)) return J(404, { error:'File not found' });
+            const stat = fs.statSync(localPath);
+            // Stream only first 30s — estimate ~128kbps = 16KB/s * 30 = 480KB
+            const maxBytes = Math.min(480 * 1024, stat.size);
+            res.writeHead(200, {
+                'Content-Type': 'audio/mpeg',
+                'Content-Length': maxBytes,
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Cache-Control': 'public,max-age=86400',
+                ...corsHeaders(origin)
+            });
+            const stream = fs.createReadStream(localPath, { start: 0, end: maxBytes - 1 });
+            stream.pipe(res);
+            return;
+        }
+
+        return new Promise(resolve => {
+            const client = fileUrl.startsWith('https:') ? https : http;
+            client.get(fileUrl, (proxyRes) => {
+                if (proxyRes.statusCode !== 200) {
+                    res.writeHead(502, corsHeaders(origin)); res.end(); return resolve();
+                }
+                res.writeHead(200, {
+                    'Content-Type': 'audio/mpeg',
+                    'Content-Disposition': `attachment; filename="${filename}"`,
+                    'Cache-Control': 'public,max-age=86400',
+                    ...corsHeaders(origin)
+                });
+                // Pipe only first ~480KB (≈30s at 128kbps)
+                let sent = 0;
+                const maxBytes = 480 * 1024;
+                proxyRes.on('data', chunk => {
+                    if (sent >= maxBytes) { proxyRes.destroy(); return; }
+                    const slice = sent + chunk.length > maxBytes ? chunk.slice(0, maxBytes - sent) : chunk;
+                    res.write(slice);
+                    sent += slice.length;
+                    if (sent >= maxBytes) { res.end(); proxyRes.destroy(); resolve(); }
+                });
+                proxyRes.on('end', () => { if (!res.writableEnded) res.end(); resolve(); });
+                proxyRes.on('error', () => { if (!res.writableEnded) res.end(); resolve(); });
+            }).on('error', () => { res.writeHead(502, corsHeaders(origin)); res.end(); resolve(); });
+        });
+    }
+
+    // ============================================================
+    // WEEKLY TOP 10 EMAIL — POST /api/admin/send-weekly-email
+    // ============================================================
+    if (method === 'POST' && pathname === '/api/admin/send-weekly-email') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+
+        // Get top 10 songs this week
+        const top10 = await query(`
+            SELECT s.id, s.title, s.artist, s.cover_path, s.cover_image, s.play_count, s.genre
+            FROM songs s
+            LEFT JOIN plays p ON s.id=p.song_id AND p.created_at > NOW() - INTERVAL '7 days'
+            WHERE s.approved=TRUE
+            GROUP BY s.id
+            ORDER BY COUNT(p.id) DESC, s.play_count DESC
+            LIMIT 10
+        `);
+
+        const songs10 = top10.rows;
+        if (!songs10.length) return J(400, { error: 'No songs found' });
+
+        // Get all users with emails
+        const usersRes = await query('SELECT email, username FROM users WHERE email IS NOT NULL ORDER BY created_at DESC');
+        const allUsers = usersRes.rows;
+        if (!allUsers.length) return J(400, { error: 'No users to email' });
+
+        const toSlug = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
+        const weekStr = new Date().toLocaleDateString('en-UG', { month: 'long', day: 'numeric', year: 'numeric' });
+
+        const songRows = songs10.map((s, i) => {
+            const cover = (s.cover_image || s.cover_path || '').startsWith('http')
+                ? (s.cover_image || s.cover_path)
+                : `${SITE_URL}/banner.jpg`;
+            const songUrl = `${SITE_URL}/song/${toSlug(s.title)}/${toSlug(s.artist)}`;
+            const rankEmoji = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'][i] || `${i+1}.`;
+            return `<tr>
+              <td style="padding:10px 8px;border-bottom:1px solid #1e293b;font-size:18px;width:36px;text-align:center">${rankEmoji}</td>
+              <td style="padding:10px 8px;border-bottom:1px solid #1e293b">
+                <a href="${songUrl}" style="color:#c084fc;font-weight:700;font-size:14px;text-decoration:none">${s.title}</a>
+                <div style="color:#94a3b8;font-size:12px;margin-top:2px">${s.artist}</div>
+              </td>
+              <td style="padding:10px 8px;border-bottom:1px solid #1e293b;color:#64748b;font-size:12px;text-align:right">${(s.play_count||0).toLocaleString()} plays</td>
+            </tr>`;
+        }).join('');
+
+        const html = `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#0a0e27;color:#e2e8f0;border-radius:16px;overflow:hidden">
+          <div style="background:linear-gradient(135deg,#a855f7,#3b82f6);padding:28px;text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">🏆</div>
+            <h1 style="margin:0;font-size:22px;font-weight:900;color:white">This Week's Top 10</h1>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Week of ${weekStr} · DJ Musta Music</p>
+          </div>
+          <div style="padding:24px">
+            <table style="width:100%;border-collapse:collapse">${songRows}</table>
+            <div style="text-align:center;margin-top:24px">
+              <a href="${SITE_URL}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#a855f7,#3b82f6);color:white;border-radius:50px;font-weight:700;font-size:14px;text-decoration:none">🎵 Listen on DJ Musta</a>
+            </div>
+          </div>
+          <div style="padding:16px 24px;border-top:1px solid #1e293b;text-align:center;font-size:11px;color:#475569">
+            Uganda's #1 Free Music Platform · <a href="${SITE_URL}" style="color:#a855f7">djmusta.com</a>
+          </div>
+        </div>`;
+
+        // Send to all users (batched to avoid Brevo rate limits)
+        let sent = 0, failed = 0;
+        for (const u of allUsers) {
+            try {
+                await sendEmail(u.email, `🏆 Top 10 Uganda Songs This Week — DJ Musta`, html);
+                sent++;
+                // Small delay to respect Brevo rate limit (300/min on free plan)
+                if (sent % 50 === 0) await new Promise(r => setTimeout(r, 12000));
+            } catch(e) { failed++; }
+        }
+
+        console.log(`[Weekly Email] Sent: ${sent}, Failed: ${failed}`);
+        return J(200, { success: true, sent, failed, total: allUsers.length });
+    }
+
+    // ============================================================
+    // ARTIST SELF-UPLOAD — public endpoint (no admin required)
+    // POST /api/songs/artist-upload
+    // ============================================================
+    if (method === 'POST' && pathname === '/api/songs/artist-upload') {
+        // Must be logged in but NOT require admin
+        if (!user) return J(401, { error: 'Please log in to upload your music' });
+
+        // Rate limit uploads: max 10 per day per user
+        const todayUploads = await query(
+            `SELECT COUNT(*) FROM songs WHERE uploaded_by=$1 AND created_at > NOW() - INTERVAL '24 hours'`,
+            [user.id]
+        );
+        if (parseInt(todayUploads.rows[0].count) >= 10)
+            return J(429, { error: 'Upload limit reached. Max 10 songs per day.' });
+
+        const ct = req.headers['content-type'] || '';
+        if (!ct.includes('multipart/form-data')) return J(400, { error: 'Multipart required' });
+        const { fields, files } = await parseMultipart(req);
+
+        const { title, artist, genre, duration, lyrics, video_url } = fields;
+        const producer    = (fields.producer || '').trim();
+        const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
+
+        if (!title?.trim())  return J(400, { error: 'Song title is required' });
+        if (!artist?.trim()) return J(400, { error: 'Artist name is required' });
+        if (!files.song)     return J(400, { error: 'Audio file (MP3) is required' });
+
+        // Validate files
+        const audioErr = validateFile(files.song, 'audio');
+        if (audioErr) return J(400, { error: audioErr });
+        if (files.cover) {
+            const imgErr = validateFile(files.cover, 'image');
+            if (imgErr) return J(400, { error: imgErr });
+        }
+
+        // Validate YouTube URL if provided
+        const cleanVideoUrl = (video_url || '').trim();
+        if (cleanVideoUrl && !cleanVideoUrl.match(/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//)) {
+            return J(400, { error: 'Video URL must be a valid YouTube link' });
+        }
+
+        let filePath, coverPath;
+        const DEFAULT_COVER_URL = `${R2_PUBLIC_URL}/covers/default-cover.svg`;
+        try {
+            filePath  = await r2Upload(files.song, 'songs');
+            coverPath = files.cover ? await r2Upload(files.cover, 'covers') : DEFAULT_COVER_URL;
+        } catch(e) {
+            return J(500, { error: 'File upload failed: ' + e.message });
+        }
+
+        const r = await query(
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10,$11) RETURNING id,title,artist`,
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
+             lyrics||'', filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl]
+        );
+        const newSong = r.rows[0];
+
+        // Notify admin
+        await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
+            ['new_upload', `🎵 New Artist Upload: ${newSong.title}`,
+             `${newSong.artist} uploaded "${newSong.title}". Review in Admin → Pending.`]
+        ).catch(()=>{});
+
+        console.log(`[Artist Upload] ${newSong.artist} — "${newSong.title}" (ID: ${newSong.id}) | User: ${user.id}`);
+        return J(201, {
+            success: true,
+            message: 'Song uploaded! It will go live after admin review (usually within 24 hours).',
+            song: newSong
+        });
     }
 
     // ── GET /api/auth/verify/:token ─────────────────────────────
