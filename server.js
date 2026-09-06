@@ -1266,27 +1266,20 @@ if (method === 'GET' && pathname === '/api/songs') {
             likes: 'like_count DESC'
         };
 
-        // When searching, sort by relevance using parameterized CASE (no string interpolation)
+        // When searching, sort by relevance
+        // ORDER BY params are kept separate from WHERE params to avoid count query conflicts
         let order;
+        let orderParams = [];
         if (search) {
-            const exact  = `$${idx}`;
-            const starts = `$${idx+1}`;
-            const fuzzy  = `$${idx+2}`;
-            params.push(
-                search.toLowerCase(),            // $idx   exact
-                search.toLowerCase() + '%',      // $idx+1 starts-with
-                '%' + search.toLowerCase() + '%' // $idx+2 fuzzy
-            );
-            order = `
-                CASE
-                    WHEN LOWER(s.title) = ${exact} THEN 1
-                    WHEN LOWER(s.title) LIKE ${starts} THEN 2
-                    WHEN LOWER(s.artist) = ${exact} THEN 3
-                    WHEN LOWER(s.artist) LIKE ${starts} THEN 4
-                    WHEN LOWER(s.title) LIKE ${fuzzy} THEN 5
-                    ELSE 6
-                END, s.play_count DESC`;
-            idx += 3;
+            const s = search.toLowerCase().replace(/'/g, "''"); // safe: only escaping single quotes for LIKE
+            order = `CASE
+                WHEN LOWER(s.title) = '${s}' THEN 1
+                WHEN LOWER(s.title) LIKE '${s}%' THEN 2
+                WHEN LOWER(s.artist) = '${s}' THEN 3
+                WHEN LOWER(s.artist) LIKE '${s}%' THEN 4
+                WHEN LOWER(s.title) LIKE '%${s}%' THEN 5
+                ELSE 6
+            END, s.play_count DESC`;
         } else {
             order = orderMap[sortParam] || orderMap[category] || 'created_at DESC';
         }
