@@ -1891,22 +1891,22 @@ if (method === 'GET' && pathname === '/api/songs') {
                 COUNT(s.id)::int AS song_count,
                 MAX(s.play_count) AS top_plays,
                 CASE 
-                    WHEN a.photo_url IS NOT NULL AND a.photo_url NOT LIKE 'data:%' 
-                    THEN a.photo_url 
-                    WHEN a.photo_url LIKE 'data:%' 
+                    WHEN MAX(a.photo_url) IS NOT NULL AND MAX(a.photo_url) NOT LIKE 'data:%' 
+                    THEN MAX(a.photo_url)
+                    WHEN MAX(a.photo_url) LIKE 'data:%'
                     THEN 'has_photo'
                     ELSE NULL 
                 END AS photo_url,
-                a.bio,
-                a.instagram,
-                a.twitter,
-                a.facebook,
+                MAX(a.bio) AS bio,
+                MAX(a.instagram) AS instagram,
+                MAX(a.twitter) AS twitter,
+                MAX(a.facebook) AS facebook,
                 bool_or(vr.status = 'approved') AS is_verified
             FROM songs s
             LEFT JOIN artists a ON LOWER(a.name) = LOWER(s.artist)
             LEFT JOIN verification_requests vr ON LOWER(vr.artist_name) = LOWER(s.artist) AND vr.status = 'approved'
             WHERE s.approved = TRUE
-            GROUP BY LOWER(s.artist), a.photo_url, a.bio, a.instagram, a.twitter, a.facebook
+            GROUP BY LOWER(s.artist)
             ORDER BY song_count DESC, LOWER(s.artist)
         `);
         return JC(200, { artists: artists.rows }, 120); // cache artists list for 2 minutes
@@ -1918,6 +1918,8 @@ if (method === 'GET' && pathname === '/api/songs') {
         const profile = await query('SELECT * FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
         const songs = await query('SELECT * FROM songs WHERE LOWER(artist)=LOWER($1) AND approved=TRUE ORDER BY created_at DESC', [artistName]);
         const artistData = profile.rows[0] || { name: artistName, bio: '', photo_url: null };
+        // If photo is stored as base64 (legacy), include the full data
+        // If photo is an R2 URL, include as-is
         return J(200, {
             artist: artistData,
             songs: songs.rows
@@ -1941,45 +1943,50 @@ if (method === 'GET' && pathname === '/api/songs') {
         return J(200, { success:true, photoUrl: savedPhotoUrl, photo_url: savedPhotoUrl });
     }
 
-    // POST /api/artists/photo - Upload artist photo as base64 (admin only)
+    // POST /api/artists/photo - Upload artist photo to R2 (admin only)
     if (method === 'POST' && pathname === '/api/artists/photo') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        // Guard: must be multipart/form-data
         const ct = req.headers['content-type'] || '';
         if (!ct.includes('multipart/form-data')) {
             return J(400, { error:'Request must be multipart/form-data' });
         }
-        // Early size check via Content-Length header
         const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-        if (contentLength > 3 * 1024 * 1024) {
-            return J(400, { error:'Photo too large. Max 2MB.' });
+        if (contentLength > 5 * 1024 * 1024) {
+            return J(400, { error:'Photo too large. Max 4MB.' });
         }
         try {
             const { fields, files } = await parseMultipart(req);
             const photo = files['photo'] || files['image'];
             const artistName = (fields['artistName'] || '').trim();
-            if (!photo || !photo.data || photo.data.length === 0) return J(400, { error:'No photo uploaded. Make sure you select an image file.' });
+            if (!photo || !photo.data || photo.data.length === 0) return J(400, { error:'No photo uploaded.' });
             if (!artistName) return J(400, { error:'Artist name required' });
-            if (photo.data.length > 2 * 1024 * 1024) return J(400, { error:'Photo too large. Max 2MB.' });
+            if (photo.data.length > 4 * 1024 * 1024) return J(400, { error:'Photo too large. Max 4MB.' });
 
-            // Validate it's actually an image
             const allowedMimes = ['image/jpeg','image/jpg','image/png','image/webp','image/gif'];
             const mime = (photo.mimetype || '').toLowerCase().split(';')[0].trim();
             if (!allowedMimes.includes(mime)) {
                 return J(400, { error:'Invalid file type. Use JPG, PNG, or WebP.' });
             }
 
-            const base64 = photo.data.toString('base64');
-            const dataUrl = `data:${mime};base64,${base64}`;
+            // Upload to R2 instead of storing as base64
+            let photoUrl;
+            try {
+                photoUrl = await r2Upload(photo, 'artists');
+            } catch(e) {
+                // Fallback to base64 if R2 fails
+                const base64 = photo.data.toString('base64');
+                photoUrl = `data:${mime};base64,${base64}`;
+                console.warn('[Artist Photo] R2 upload failed, using base64 fallback:', e.message);
+            }
 
             const existing = await query('SELECT id FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
             if (existing.rows.length) {
-                await query('UPDATE artists SET photo_url=$1 WHERE LOWER(name)=LOWER($2)', [dataUrl, artistName]);
+                await query('UPDATE artists SET photo_url=$1 WHERE LOWER(name)=LOWER($2)', [photoUrl, artistName]);
             } else {
-                await query('INSERT INTO artists (name, photo_url) VALUES ($1,$2)', [artistName, dataUrl]);
+                await query('INSERT INTO artists (name, photo_url) VALUES ($1,$2)', [artistName, photoUrl]);
             }
-            console.log(`[Artist Photo] Uploaded photo for: ${artistName} (${Math.round(photo.data.length/1024)}KB)`);
-            return J(200, { success:true, photoUrl: dataUrl, photo_url: dataUrl });
+            console.log(`[Artist Photo] Uploaded for: ${artistName} → ${photoUrl.substring(0,60)}`);
+            return J(200, { success:true, photoUrl, photo_url: photoUrl });
         } catch(err) {
             console.error('[Artist Photo] Error:', err);
             return J(500, { error:'Upload failed: ' + err.message });
