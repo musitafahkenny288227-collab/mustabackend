@@ -1554,7 +1554,7 @@ if (method === 'GET' && pathname === '/api/songs') {
             const songData = await query('SELECT s.*, u.email as uploader_email, u.username as uploader_name FROM songs s LEFT JOIN users u ON s.uploaded_by=u.id WHERE s.id=$1', [seg[1]]);
             if (songData.rows[0]) {
                 const s = songData.rows[0];
-                updateSitemap(s);
+                updateSitemap(s, query).catch(err => console.log('[Sitemap] update error:', err.message));
                 pingSearchEngines().catch(err => console.log('Ping failed:', err.message));
                 // Ping Google IndexNow so the song page gets indexed fast
                 pingGoogleIndexNow(s).catch(() => {});
