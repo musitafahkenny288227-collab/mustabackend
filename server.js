@@ -1247,11 +1247,10 @@ if (method === 'GET' && pathname === '/api/songs') {
             idx++;
         }
 
-        // Filter by release year (e.g. release_year=2026 for new songs only)
-        // Also includes songs created in the last 30 days regardless of release_year (handles NULL)
+        // Filter by release year — strict: only songs with release_year >= value
         const releaseYearFilter = q.get('release_year') || '';
         if (releaseYearFilter && !isNaN(parseInt(releaseYearFilter))) {
-            where += ` AND (release_year >= $${idx} OR (release_year IS NULL AND created_at > NOW() - INTERVAL '30 days'))`;
+            where += ` AND release_year >= $${idx}`;
             params.push(parseInt(releaseYearFilter));
             idx++;
         }
@@ -1888,10 +1887,9 @@ if (method === 'GET' && pathname === '/api/songs') {
     if (method === 'GET' && pathname === '/api/artists') {
         const artists = await query(`
             SELECT
-                s.artist AS name,
+                INITCAP(LOWER(s.artist)) AS name,
                 COUNT(s.id)::int AS song_count,
                 MAX(s.play_count) AS top_plays,
-                -- Only return photo_url if it's a real URL (not base64 — those are too large for list view)
                 CASE 
                     WHEN a.photo_url IS NOT NULL AND a.photo_url NOT LIKE 'data:%' 
                     THEN a.photo_url 
@@ -1906,10 +1904,10 @@ if (method === 'GET' && pathname === '/api/songs') {
                 bool_or(vr.status = 'approved') AS is_verified
             FROM songs s
             LEFT JOIN artists a ON LOWER(a.name) = LOWER(s.artist)
-            LEFT JOIN verification_requests vr ON vr.artist_name = s.artist AND vr.status = 'approved'
+            LEFT JOIN verification_requests vr ON LOWER(vr.artist_name) = LOWER(s.artist) AND vr.status = 'approved'
             WHERE s.approved = TRUE
-            GROUP BY s.artist, a.photo_url, a.bio, a.instagram, a.twitter, a.facebook
-            ORDER BY song_count DESC, s.artist
+            GROUP BY LOWER(s.artist), a.photo_url, a.bio, a.instagram, a.twitter, a.facebook
+            ORDER BY song_count DESC, LOWER(s.artist)
         `);
         return JC(200, { artists: artists.rows }, 120); // cache artists list for 2 minutes
     }
@@ -1920,7 +1918,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         const profile = await query('SELECT * FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
         const songs = await query('SELECT * FROM songs WHERE LOWER(artist)=LOWER($1) AND approved=TRUE ORDER BY created_at DESC', [artistName]);
         const artistData = profile.rows[0] || { name: artistName, bio: '', photo_url: null };
-        return J(200, { 
+        return J(200, {
             artist: artistData,
             songs: songs.rows
         });
@@ -2398,11 +2396,11 @@ if (method === 'GET' && pathname === '/api/songs') {
     // GET /api/charts/top-artists - Top 5 artists this week
     if (method === 'GET' && pathname === '/api/charts/top-artists') {
         const r = await query(`
-            SELECT s.artist, COUNT(p.id) as week_plays, SUM(s.like_count) as total_likes
+            SELECT INITCAP(LOWER(s.artist)) as artist, COUNT(p.id) as week_plays, SUM(s.like_count) as total_likes
             FROM songs s
             LEFT JOIN plays p ON s.id=p.song_id AND p.created_at > NOW() - INTERVAL '7 days'
             WHERE s.approved=TRUE
-            GROUP BY s.artist
+            GROUP BY LOWER(s.artist)
             ORDER BY week_plays DESC
             LIMIT 5
         `);
