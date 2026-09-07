@@ -37,21 +37,35 @@ function buildXml(songs) {
     const today = new Date().toISOString().split('T')[0];
 
     const staticPages = [
-        { loc: `${SITE_URL}`,              changefreq: 'daily',  priority: '1.0' },
-        { loc: `${SITE_URL}/new-music`,    changefreq: 'daily',  priority: '0.95' },
-        { loc: `${SITE_URL}/top-songs`,    changefreq: 'weekly', priority: '0.92' },
-        { loc: `${SITE_URL}/top-artists`,  changefreq: 'weekly', priority: '0.90' },
-        { loc: `${SITE_URL}/nonstops`,     changefreq: 'weekly', priority: '0.88' },
-        { loc: `${SITE_URL}/gospel`,       changefreq: 'weekly', priority: '0.88' },
-        { loc: `${SITE_URL}/dancehall`,    changefreq: 'weekly', priority: '0.88' },
-        { loc: `${SITE_URL}/afrobeat`,     changefreq: 'weekly', priority: '0.88' },
+        { loc: `${SITE_URL}`,                  changefreq: 'daily',   priority: '1.0'  },
+        { loc: `${SITE_URL}/new-music`,        changefreq: 'daily',   priority: '0.95' },
+        { loc: `${SITE_URL}/top-songs`,        changefreq: 'weekly',  priority: '0.92' },
+        { loc: `${SITE_URL}/top-artists`,      changefreq: 'weekly',  priority: '0.90' },
+        { loc: `${SITE_URL}/nonstops`,         changefreq: 'weekly',  priority: '0.88' },
+        { loc: `${SITE_URL}/gospel`,           changefreq: 'weekly',  priority: '0.88' },
+        { loc: `${SITE_URL}/dancehall`,        changefreq: 'weekly',  priority: '0.88' },
+        { loc: `${SITE_URL}/afrobeat`,         changefreq: 'weekly',  priority: '0.88' },
+        { loc: `${SITE_URL}/artist-upload`,    changefreq: 'monthly', priority: '0.80' },
+        { loc: `${SITE_URL}/about`,            changefreq: 'monthly', priority: '0.60' },
+        { loc: `${SITE_URL}/contact`,          changefreq: 'monthly', priority: '0.60' },
+        { loc: `${SITE_URL}/copyright`,        changefreq: 'yearly',  priority: '0.40' },
+        { loc: `${SITE_URL}/privacy-policy`,   changefreq: 'yearly',  priority: '0.30' },
+        { loc: `${SITE_URL}/terms`,            changefreq: 'yearly',  priority: '0.30' },
     ];
 
     const staticUrls = staticPages.map(p =>
         `  <url>\n    <loc>${p.loc}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>`
     ).join('\n');
 
-    const songUrls = songs.map(s => {
+    const seenSongUrls = new Set();
+    const songUrls = songs.filter(s => {
+        const titleSlug  = createSlug(s.title)  || `song-${s.id}`;
+        const artistSlug = createSlug(s.artist) || 'unknown';
+        const songUrl    = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
+        if (seenSongUrls.has(songUrl)) return false;
+        seenSongUrls.add(songUrl);
+        return true;
+    }).map(s => {
         const titleSlug  = createSlug(s.title)  || `song-${s.id}`;
         const artistSlug = createSlug(s.artist) || 'unknown';
         const songUrl    = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
