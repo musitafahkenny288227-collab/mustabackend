@@ -1917,7 +1917,9 @@ if (method === 'GET' && pathname === '/api/songs') {
             GROUP BY LOWER(s.artist)
             ORDER BY song_count DESC, LOWER(s.artist)
         `);
-        return JC(200, { artists: artists.rows }, 120); // cache artists list for 2 minutes
+        // Artist photos and verification state can change from the profile editor;
+        // do not serve a stale public list after an upload.
+        return J(200, { artists: artists.rows });
     }
 
     // GET /api/artists/:name - Get artist profile and songs
