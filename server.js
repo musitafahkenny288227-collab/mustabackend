@@ -967,7 +967,15 @@ const server = http.createServer(async (req, res) => {
     <priority>${p.priority}</priority>
   </url>`).join('\n');
 
-            const songUrls = songs.rows.map(s => {
+            const seenSongUrls = new Set();
+            const songUrls = songs.rows.filter(s => {
+                const titleSlug  = toSlug(s.title);
+                const artistSlug = toSlug(s.artist);
+                const songUrl    = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
+                if (seenSongUrls.has(songUrl)) return false;
+                seenSongUrls.add(songUrl);
+                return true;
+            }).map(s => {
                 const titleSlug  = toSlug(s.title);
                 const artistSlug = toSlug(s.artist);
                 const songUrl    = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
