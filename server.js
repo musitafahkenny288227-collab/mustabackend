@@ -647,6 +647,8 @@ function getUser(req) {
 // ============================================================
 // CORS
 // ============================================================
+const normalizeOrigin = origin => (origin || '').replace(/\/$/, '');
+
 const ALLOWED_ORIGINS = [
     'https://djmusta.com',
     'https://www.djmusta.com',
@@ -656,10 +658,11 @@ const ALLOWED_ORIGINS = [
     FRONTEND_URL,
     'http://localhost:5000',
     'http://localhost:3000'
-].filter(Boolean);
+].map(normalizeOrigin).filter(Boolean);
 
 // Allow all *.djmusta.pages.dev preview URLs
 function isAllowedOrigin(origin) {
+    origin = normalizeOrigin(origin);
     if (!origin) return false;
     if (ALLOWED_ORIGINS.includes(origin)) return true;
     // Allow all Cloudflare Pages preview deployments
@@ -668,9 +671,10 @@ function isAllowedOrigin(origin) {
 }
 
 function corsHeaders(origin) {
-    const allowed = isAllowedOrigin(origin);
+    const normalizedOrigin = normalizeOrigin(origin);
+    const allowed = isAllowedOrigin(normalizedOrigin);
     return {
-        'Access-Control-Allow-Origin':      allowed ? origin : 'https://djmusta.com',
+        ...(allowed ? { 'Access-Control-Allow-Origin': normalizedOrigin } : {}),
         'Access-Control-Allow-Headers':     'Content-Type, Authorization',
         'Access-Control-Allow-Methods':     'GET,POST,PATCH,DELETE,OPTIONS',
         'Access-Control-Allow-Credentials': 'false',
@@ -1213,7 +1217,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                      LIMIT 1`
                 );
             }
-            if (!r.rows[0]) return J(404, { error:'No song of the day' });
+            if (!r.rows[0]) return J(200, { song: null });
             return JC(200, { song: r.rows[0] }, 60); // cache song of the day for 1 minute
         } catch(e) {
             return J(500, { error:'Could not load song of the day' });
