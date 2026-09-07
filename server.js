@@ -1923,9 +1923,16 @@ if (method === 'GET' && pathname === '/api/songs') {
     // GET /api/artists/:name - Get artist profile and songs
     if (method === 'GET' && seg[0]==='artists' && seg[1] && !seg[2]) {
         const artistName = decodeURIComponent(seg[1]);
-        const profile = await query('SELECT * FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
+        const profile = await query(`
+            SELECT a.*,
+                   EXISTS(
+                       SELECT 1 FROM verification_requests vr
+                       WHERE LOWER(vr.artist_name)=LOWER(a.name) AND vr.status='approved'
+                   ) AS is_verified
+            FROM artists a WHERE LOWER(a.name)=LOWER($1)
+        `, [artistName]);
         const songs = await query('SELECT * FROM songs WHERE LOWER(artist)=LOWER($1) AND approved=TRUE ORDER BY created_at DESC', [artistName]);
-        const artistData = profile.rows[0] || { name: artistName, bio: '', photo_url: null };
+        const artistData = profile.rows[0] || { name: artistName, bio: '', photo_url: null, is_verified: false };
         // If photo is stored as base64 (legacy), include the full data
         // If photo is an R2 URL, include as-is
         return J(200, {
@@ -1934,10 +1941,17 @@ if (method === 'GET' && pathname === '/api/songs') {
         });
     }
 
-    // PATCH /api/artists/:name - Update artist profile (admin only)
+    // PATCH /api/artists/:name - Update artist profile (admin or owning artist)
     if (method === 'PATCH' && seg[0]==='artists' && seg[1] && !seg[2]) {
-        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        if (!user) return J(401, { error:'Login required' });
         const artistName = decodeURIComponent(seg[1]);
+        if (!user.isAdmin) {
+            const ownership = await query(
+                'SELECT 1 FROM songs WHERE uploaded_by=$1 AND LOWER(artist)=LOWER($2) LIMIT 1',
+                [user.id, artistName]
+            );
+            if (!ownership.rows.length) return J(403, { error:'You can only edit an artist profile linked to your uploads' });
+        }
         const { bio, photoUrl, photo_url, instagram, twitter, facebook } = await parseJSON(req);
         const savedPhotoUrl = photoUrl || photo_url || null;
         const existing = await query('SELECT id FROM artists WHERE LOWER(name)=LOWER($1)', [artistName]);
@@ -1951,9 +1965,9 @@ if (method === 'GET' && pathname === '/api/songs') {
         return J(200, { success:true, photoUrl: savedPhotoUrl, photo_url: savedPhotoUrl });
     }
 
-    // POST /api/artists/photo - Upload artist photo to R2 (admin only)
+    // POST /api/artists/photo - Upload artist photo to R2 (admin or owning artist)
     if (method === 'POST' && pathname === '/api/artists/photo') {
-        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        if (!user) return J(401, { error:'Login required' });
         const ct = req.headers['content-type'] || '';
         if (!ct.includes('multipart/form-data')) {
             return J(400, { error:'Request must be multipart/form-data' });
@@ -1968,6 +1982,13 @@ if (method === 'GET' && pathname === '/api/songs') {
             const artistName = (fields['artistName'] || '').trim();
             if (!photo || !photo.data || photo.data.length === 0) return J(400, { error:'No photo uploaded.' });
             if (!artistName) return J(400, { error:'Artist name required' });
+            if (!user.isAdmin) {
+                const ownership = await query(
+                    'SELECT 1 FROM songs WHERE uploaded_by=$1 AND LOWER(artist)=LOWER($2) LIMIT 1',
+                    [user.id, artistName]
+                );
+                if (!ownership.rows.length) return J(403, { error:'You can only edit an artist profile linked to your uploads' });
+            }
             if (photo.data.length > 4 * 1024 * 1024) return J(400, { error:'Photo too large. Max 4MB.' });
 
             const allowedMimes = ['image/jpeg','image/jpg','image/png','image/webp','image/gif'];
@@ -2460,6 +2481,52 @@ if (method === 'GET' && pathname === '/api/songs') {
             comments: parseInt(comments.rows[0].count),
             verifications: parseInt(verifications.rows[0].count),
             revenue: parseInt(premium.rows[0].count) * 10000
+        });
+    }
+
+    // GET /api/admin/analytics - Time-series and ranking data for admin dashboard
+    if (method === 'GET' && pathname === '/api/admin/analytics') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const [dailyPlays, dailyDownloads, topSongs, topArtists, uploadGrowth] = await Promise.all([
+            query(`
+                SELECT TO_CHAR(days.day, 'Mon DD') AS label, COUNT(p.id)::int AS value
+                FROM generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day') AS days(day)
+                LEFT JOIN plays p ON p.created_at >= days.day AND p.created_at < days.day + INTERVAL '1 day'
+                GROUP BY days.day ORDER BY days.day
+            `),
+            query(`
+                SELECT TO_CHAR(days.day, 'Mon DD') AS label, COUNT(d.id)::int AS value
+                FROM generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day') AS days(day)
+                LEFT JOIN downloads d ON d.created_at >= days.day AND d.created_at < days.day + INTERVAL '1 day'
+                GROUP BY days.day ORDER BY days.day
+            `),
+            query(`
+                SELECT title, artist, play_count::int AS plays, download_count::int AS downloads
+                FROM songs WHERE approved=TRUE
+                ORDER BY play_count DESC, download_count DESC LIMIT 10
+            `),
+            query(`
+                SELECT artist, SUM(play_count)::int AS plays, SUM(download_count)::int AS downloads,
+                       COUNT(*)::int AS songs
+                FROM songs WHERE approved=TRUE
+                GROUP BY artist ORDER BY SUM(play_count) DESC, SUM(download_count) DESC LIMIT 10
+            `),
+            query(`
+                SELECT TO_CHAR(weeks.week, 'Mon DD') AS label, COUNT(s.id)::int AS value
+                FROM generate_series(
+                    date_trunc('week', CURRENT_DATE) - INTERVAL '11 weeks',
+                    date_trunc('week', CURRENT_DATE), INTERVAL '1 week'
+                ) AS weeks(week)
+                LEFT JOIN songs s ON s.created_at >= weeks.week AND s.created_at < weeks.week + INTERVAL '1 week'
+                GROUP BY weeks.week ORDER BY weeks.week
+            `)
+        ]);
+        return J(200, {
+            dailyPlays: dailyPlays.rows,
+            dailyDownloads: dailyDownloads.rows,
+            topSongs: topSongs.rows,
+            topArtists: topArtists.rows,
+            uploadGrowth: uploadGrowth.rows
         });
     }
 
