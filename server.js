@@ -391,6 +391,40 @@ async function sendPushToSubscribers({ title, body, songId = null, url = '/' }) 
     return { sent, failed, total: subs.rows.length, expiredRemoved: expiredEndpoints.length };
 }
 
+async function emailNewSongToAllUsers(song) {
+    if (!BREVO_API_KEY) {
+        console.warn('[Email] BREVO_API_KEY not set — new-song email skipped');
+        return { sent: 0, failed: 0, skipped: true };
+    }
+
+    const users = await query('SELECT email, username FROM users WHERE email IS NOT NULL ORDER BY created_at DESC');
+    const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const songUrl = `${SITE_URL}/?song=${encodeURIComponent(song.id)}`;
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#0a0e27;color:#e2e8f0;padding:30px;border-radius:12px">
+            <h2 style="color:#a855f7">🎵 New Song on DJ Musta</h2>
+            <p>${esc(song.artist)} just released a new song.</p>
+            <p style="background:#1a1f3a;padding:16px;border-radius:8px;border-left:4px solid #a855f7">
+                🎵 <strong>${esc(song.title)}</strong> by ${esc(song.artist)}
+            </p>
+            <a href="${songUrl}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#a855f7;color:white;border-radius:8px;text-decoration:none;font-weight:700">Listen Now</a>
+        </div>`;
+
+    let sent = 0;
+    let failed = 0;
+    for (const user of users.rows) {
+        try {
+            await sendEmail(user.email, `🎵 New Song: ${song.title} - DJ Musta`, html);
+            sent++;
+            if (sent % 50 === 0) await new Promise(resolve => setTimeout(resolve, 12000));
+        } catch (error) {
+            failed++;
+        }
+    }
+    console.log(`[Email] New song sent: ${sent}, failed: ${failed}, total: ${users.rows.length}`);
+    return { sent, failed, total: users.rows.length };
+}
+
 // Keep Neon DB alive - ping every 4 minutes
 setInterval(async () => {
     try { await query('SELECT 1'); } catch(e) { console.log('[DB Keep-alive] ping failed:', e.message); }
@@ -1620,6 +1654,7 @@ if (method === 'GET' && pathname === '/api/songs') {
                     songId: s.id,
                     url: `/?song=${s.id}`
                 }).catch(err => console.error('[Push] Auto-notification failed:', err.message));
+                emailNewSongToAllUsers(s).catch(err => console.error('[Email] Auto-notification failed:', err.message));
 
                 // Email uploader
                 if (s.uploader_email) {
