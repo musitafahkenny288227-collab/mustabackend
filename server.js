@@ -2640,6 +2640,7 @@ if (method === 'GET' && pathname === '/api/songs') {
 
     // POST /api/push/subscribe - Save a push subscription
     if (method === 'POST' && pathname === '/api/push/subscribe') {
+        if (!VAPID_PRIVATE) return J(503, { error: 'Push notifications are not configured on the server' });
         const body = await parseJSON(req);
         const sub = body.subscription;
         if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
@@ -2667,6 +2668,7 @@ if (method === 'GET' && pathname === '/api/songs') {
     // POST /api/push/send - Send push notification to ALL subscribers (admin only)
     if (method === 'POST' && pathname === '/api/push/send') {
         if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        if (!VAPID_PRIVATE) return J(503, { error: 'Push notifications are not configured on the server' });
         const { title, body, songId, icon, url } = await parseJSON(req);
         if (!title || !body) return J(400, { error: 'title and body required' });
 
