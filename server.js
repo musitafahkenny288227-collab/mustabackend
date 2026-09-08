@@ -42,6 +42,8 @@ try {
 const EMAIL_USER = process.env.EMAIL_USER || 'musitafahkenny288227@gmail.com';
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.com';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
 async function sendEmail(to, subject, html) {
     return new Promise((resolve, reject) => {
@@ -76,6 +78,40 @@ async function sendEmail(to, subject, html) {
         req.on('error', e => { console.error('[Email] Error:', e.message); resolve(); });
         req.write(body);
         req.end();
+    });
+}
+
+async function sendTelegramNewSong(song) {
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+        console.warn('[Telegram] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — notification skipped');
+        return;
+    }
+
+    const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const message = `🎵 <b>New Song on DJ Musta</b>\n\n<b>${esc(song.title)}</b> by ${esc(song.artist)}\n\n<a href="${SITE_URL}/?song=${encodeURIComponent(song.id)}">Listen now</a>`;
+    const body = JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'HTML', disable_web_page_preview: false });
+
+    await new Promise(resolve => {
+        const request = https.request({
+            hostname: 'api.telegram.org',
+            path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, response => {
+            let data = '';
+            response.on('data', chunk => data += chunk);
+            response.on('end', () => {
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                    console.log('[Telegram] New-song notification sent');
+                } else {
+                    console.error('[Telegram] Failed:', response.statusCode, data);
+                }
+                resolve();
+            });
+        });
+        request.on('error', error => { console.error('[Telegram] Error:', error.message); resolve(); });
+        request.write(body);
+        request.end();
     });
 }
 
@@ -571,6 +607,14 @@ async function initDB() {
             link        TEXT,
             is_read     BOOLEAN DEFAULT FALSE,
             created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+
+    await query(`
+        CREATE TABLE IF NOT EXISTS site_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT '',
+            updated_at TIMESTAMPTZ DEFAULT NOW()
         )
     `);
 
@@ -1655,6 +1699,7 @@ if (method === 'GET' && pathname === '/api/songs') {
                     url: `/?song=${s.id}`
                 }).catch(err => console.error('[Push] Auto-notification failed:', err.message));
                 emailNewSongToAllUsers(s).catch(err => console.error('[Email] Auto-notification failed:', err.message));
+                sendTelegramNewSong(s).catch(err => console.error('[Telegram] Auto-notification failed:', err.message));
 
                 // Email uploader
                 if (s.uploader_email) {
@@ -2984,6 +3029,42 @@ if (method === 'GET' && pathname === '/api/songs') {
                 proxyRes.on('error', () => { if (!res.writableEnded) res.end(); resolve(); });
             }).on('error', () => { res.writeHead(502, corsHeaders(origin)); res.end(); resolve(); });
         });
+    }
+
+    // GET /api/settings/download-ad - Public download advert settings
+    if (method === 'GET' && pathname === '/api/settings/download-ad') {
+        const result = await query("SELECT key, value FROM site_settings WHERE key LIKE 'download_ad_%'");
+        const settings = result.rows.reduce((values, row) => {
+            values[row.key.replace('download_ad_', '')] = row.value;
+            return values;
+        }, {});
+        return J(200, {
+            enabled: settings.enabled !== 'false',
+            imageUrl: settings.image_url || '',
+            title: settings.title || 'Support DJ Musta',
+            message: settings.message || 'Discover more music on DJ Musta.',
+            linkUrl: settings.link_url || ''
+        });
+    }
+
+    // PATCH /api/admin/settings/download-ad - Update download advert settings
+    if (method === 'PATCH' && pathname === '/api/admin/settings/download-ad') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const body = await parseJSON(req);
+        const values = {
+            enabled: body.enabled === false ? 'false' : 'true',
+            image_url: String(body.imageUrl || '').trim().substring(0, 2000),
+            title: String(body.title || '').trim().substring(0, 120),
+            message: String(body.message || '').trim().substring(0, 300),
+            link_url: String(body.linkUrl || '').trim().substring(0, 2000)
+        };
+        for (const [key, value] of Object.entries(values)) {
+            await query(`
+                INSERT INTO site_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()
+            `, [`download_ad_${key}`, value]);
+        }
+        return J(200, { success: true, ...values });
     }
 
     // ============================================================
