@@ -3035,15 +3035,16 @@ if (method === 'GET' && pathname === '/api/songs') {
     if (method === 'GET' && pathname === '/api/settings/download-ad') {
         const result = await query("SELECT key, value FROM site_settings WHERE key LIKE 'download_ad_%'");
         const settings = result.rows.reduce((values, row) => {
-            values[row.key.replace('download_ad_', '')] = row.value;
+            const key = row.key.replace('download_ad_', '');
+            values[key] = row.value;
             return values;
         }, {});
         return J(200, {
             enabled: settings.enabled !== 'false',
-            imageUrl: settings.image_url || '',
+            imageUrl: settings.imageUrl || settings.image_url || '',
             title: settings.title || '',
             message: settings.message || '',
-            linkUrl: settings.link_url || ''
+            linkUrl: settings.linkUrl || settings.link_url || ''
         });
     }
 
