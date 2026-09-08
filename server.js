@@ -3039,7 +3039,7 @@ if (method === 'GET' && pathname === '/api/songs') {
             return values;
         }, {});
         return J(200, {
-            enabled: settings.enabled === 'true',
+            enabled: settings.enabled !== 'false',
             imageUrl: settings.image_url || '',
             title: settings.title || '',
             message: settings.message || '',
