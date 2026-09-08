@@ -352,6 +352,45 @@ async function query(sql, params = []) {
     }
 }
 
+async function sendPushToSubscribers({ title, body, songId = null, url = '/' }) {
+    if (!VAPID_PRIVATE) return { sent: 0, failed: 0, total: 0, skipped: true };
+
+    const subs = await query('SELECT endpoint, p256dh, auth FROM push_subscriptions');
+    let sent = 0;
+    let failed = 0;
+    const expiredEndpoints = [];
+    const payload = JSON.stringify({
+        title,
+        body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        url,
+        songId,
+        tag: 'djmusta-song-' + (songId || Date.now())
+    });
+
+    await Promise.allSettled(subs.rows.map(async sub => {
+        try {
+            await webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                payload,
+                { TTL: 86400 }
+            );
+            sent++;
+        } catch (error) {
+            failed++;
+            if (error.statusCode === 404 || error.statusCode === 410) expiredEndpoints.push(sub.endpoint);
+        }
+    }));
+
+    if (expiredEndpoints.length) {
+        await query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1)', [expiredEndpoints]);
+    }
+
+    console.log(`[Push] Sent: ${sent}, Failed: ${failed}, Expired removed: ${expiredEndpoints.length}`);
+    return { sent, failed, total: subs.rows.length, expiredRemoved: expiredEndpoints.length };
+}
+
 // Keep Neon DB alive - ping every 4 minutes
 setInterval(async () => {
     try { await query('SELECT 1'); } catch(e) { console.log('[DB Keep-alive] ping failed:', e.message); }
@@ -1575,6 +1614,12 @@ if (method === 'GET' && pathname === '/api/songs') {
                 pingSearchEngines().catch(err => console.log('Ping failed:', err.message));
                 // Ping Google IndexNow so the song page gets indexed fast
                 pingGoogleIndexNow(s).catch(() => {});
+                sendPushToSubscribers({
+                    title: `🎵 New Song: ${s.title}`,
+                    body: `${s.artist} is now live on DJ Musta. Tap to listen!`,
+                    songId: s.id,
+                    url: `/?song=${s.id}`
+                }).catch(err => console.error('[Push] Auto-notification failed:', err.message));
 
                 // Email uploader
                 if (s.uploader_email) {
