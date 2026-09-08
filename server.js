@@ -3039,13 +3039,14 @@ if (method === 'GET' && pathname === '/api/songs') {
             values[key] = row.value;
             return values;
         }, {});
-        return J(200, {
+        const normalized = {
             enabled: settings.enabled !== 'false',
             imageUrl: settings.imageUrl || settings.image_url || '',
             title: settings.title || '',
             message: settings.message || '',
             linkUrl: settings.linkUrl || settings.link_url || ''
-        });
+        };
+        return J(200, normalized);
     }
 
     // POST /api/admin/settings/download-ad-upload - Upload advert image
@@ -3068,12 +3069,16 @@ if (method === 'GET' && pathname === '/api/songs') {
     if (method === 'PATCH' && pathname === '/api/admin/settings/download-ad') {
         if (!user?.isAdmin) return J(403, { error: 'Admin only' });
         const body = await parseJSON(req);
+        const imageUrl = String(body.imageUrl || body.image_url || '').trim().substring(0, 2000);
+        const linkUrl = String(body.linkUrl || body.link_url || '').trim().substring(0, 2000);
         const values = {
             enabled: body.enabled === false ? 'false' : 'true',
-            image_url: String(body.imageUrl || '').trim().substring(0, 2000),
+            image_url: imageUrl,
+            imageUrl,
             title: String(body.title || '').trim().substring(0, 120),
             message: String(body.message || '').trim().substring(0, 300),
-            link_url: String(body.linkUrl || '').trim().substring(0, 2000)
+            link_url: linkUrl,
+            linkUrl
         };
         for (const [key, value] of Object.entries(values)) {
             await query(`
@@ -3081,7 +3086,7 @@ if (method === 'GET' && pathname === '/api/songs') {
                 ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()
             `, [`download_ad_${key}`, value]);
         }
-        return J(200, { success: true, ...values });
+        return J(200, { success: true, enabled: values.enabled, imageUrl, title: values.title, message: values.message, linkUrl });
     }
 
     // ============================================================
