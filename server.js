@@ -531,6 +531,8 @@ async function initDB() {
     }
     // Add producer column if missing
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS producer TEXT DEFAULT ''`);
+    // Add album column if missing
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT ''`);
 
     // Seed admin - ensure musitafahkenny288227@gmail.com is admin
     // SECURITY: Use ADMIN_SEED_PASSWORD env var. Fallback only used on first-run
@@ -576,6 +578,7 @@ async function initDB() {
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsored_until TIMESTAMPTZ');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsor_name TEXT DEFAULT \'\'');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_image TEXT');
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT \'' );
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS video_url TEXT DEFAULT \'\'');
         // Fix songs that have NULL release_year — default them to 2026
         await query(`UPDATE songs SET release_year = 2026 WHERE release_year IS NULL`);
@@ -1320,15 +1323,16 @@ if (method === 'GET' && pathname === '/api/songs') {
     // POST /api/songs/admin/add - Admin quick-add a song by direct URL (JSON body)
     if (method === 'POST' && pathname === '/api/songs/admin/add') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const { title, artist, genre, duration, file_path, cover_path, lyrics, release_year, releaseYear } = await parseJSON(req);
+        const { title, artist, genre, duration, file_path, cover_path, lyrics, release_year, releaseYear, album } = await parseJSON(req);
         if (!title || !artist) return J(400, { error:'title and artist are required' });
         if (!file_path) return J(400, { error:'file_path (audio URL) is required' });
         const yr = release_year || releaseYear || new Date().getFullYear();
+        const albumName = (album || '').trim();
         const r = await query(
-            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, release_year, approved, uploaded_by, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,NOW()) RETURNING *`,
+            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, album, release_year, approved, uploaded_by, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,NOW()) RETURNING *`,
             [title.trim(), artist.trim(), genre||'Other', duration||'0:00',
-             file_path.trim(), cover_path||null, lyrics||'', yr, user.id]
+             file_path.trim(), cover_path||null, lyrics||'', albumName || null, yr, user.id]
         );
         const song = r.rows[0];
         pingSearchEngines().catch(() => {});
@@ -1383,6 +1387,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         if (!ct.includes('multipart/form-data')) return J(400, { error:'Multipart required' });
         const { fields, files } = await parseMultipart(req);
         const { title, artist, genre, duration, lyrics } = fields;
+        const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
         const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
         if (!title?.trim())  return J(400, { error:'Title required' });
@@ -1408,8 +1413,8 @@ if (method === 'GET' && pathname === '/api/songs') {
         }
 
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
         );
         const newSong = r.rows[0];
         // Ping search engines after admin-approved uploads
@@ -1622,7 +1627,7 @@ if (method === 'GET' && pathname === '/api/songs') {
     if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
-        const allowed = ['title','artist','genre','duration','lyrics','release_year',
+        const allowed = ['title','artist','genre','duration','lyrics','release_year','album',
                          'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer','video_url'];
         const sets = []; const vals = [];
         for (const key of allowed) {
@@ -1631,6 +1636,9 @@ if (method === 'GET' && pathname === '/api/songs') {
         // Also accept camelCase releaseYear sent by the admin edit form
         if (body.releaseYear !== undefined && body.release_year === undefined) {
             vals.push(body.releaseYear); sets.push('release_year=$'+vals.length);
+        }
+        if (body.albumName !== undefined && body.album === undefined) {
+            vals.push(body.albumName); sets.push('album=$'+vals.length);
         }
         if (!sets.length) return J(400, { error:'No valid fields' });
         if (body.is_song_of_day === true) {
@@ -2994,6 +3002,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         const { fields, files } = await parseMultipart(req);
 
         const { title, artist, genre, duration, lyrics, video_url } = fields;
+        const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
         const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
 
@@ -3025,10 +3034,10 @@ if (method === 'GET' && pathname === '/api/songs') {
         }
 
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10,$11) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10,$11,$12) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl]
+             lyrics||'', filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
         );
         const newSong = r.rows[0];
 
