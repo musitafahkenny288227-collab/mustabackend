@@ -695,13 +695,13 @@ async function initDB() {
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsored_until TIMESTAMPTZ');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsor_name TEXT DEFAULT \'\'');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_image TEXT');
-        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT \'' );
+        await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT \'\'');
         await query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS video_url TEXT DEFAULT \'\'');
         // Fix songs that have NULL release_year — default them to 2026
         await query(`UPDATE songs SET release_year = 2026 WHERE release_year IS NULL`);
         console.log('✅ User columns updated');
     } catch(e) {
-        console.log('⚠️ Column update skipped');
+        console.warn('⚠️ Column update skipped:', e.message);
     }
 
     console.log('✅ Database ready');
