@@ -3044,7 +3044,9 @@ if (method === 'GET' && pathname === '/api/songs') {
             imageUrl: settings.imageUrl || settings.image_url || '',
             title: settings.title || '',
             message: settings.message || '',
-            linkUrl: settings.linkUrl || settings.link_url || ''
+            linkUrl: settings.linkUrl || settings.link_url || '',
+            videoUrl: settings.videoUrl || settings.video_url || '',
+            adType: settings.adType || settings.ad_type || 'image'
         };
         return J(200, normalized);
     }
@@ -3071,6 +3073,8 @@ if (method === 'GET' && pathname === '/api/songs') {
         const body = await parseJSON(req);
         const imageUrl = String(body.imageUrl || body.image_url || '').trim().substring(0, 2000);
         const linkUrl = String(body.linkUrl || body.link_url || '').trim().substring(0, 2000);
+        const videoUrl = String(body.videoUrl || body.video_url || '').trim().substring(0, 2000);
+        const adType = ['image', 'video'].includes(body.adType) ? body.adType : 'image';
         const values = {
             enabled: body.enabled === false ? 'false' : 'true',
             image_url: imageUrl,
@@ -3078,7 +3082,11 @@ if (method === 'GET' && pathname === '/api/songs') {
             title: String(body.title || '').trim().substring(0, 120),
             message: String(body.message || '').trim().substring(0, 300),
             link_url: linkUrl,
-            linkUrl
+            linkUrl,
+            video_url: videoUrl,
+            videoUrl,
+            ad_type: adType,
+            adType
         };
         for (const [key, value] of Object.entries(values)) {
             await query(`
