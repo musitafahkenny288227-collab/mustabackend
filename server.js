@@ -3039,12 +3039,28 @@ if (method === 'GET' && pathname === '/api/songs') {
             return values;
         }, {});
         return J(200, {
-            enabled: settings.enabled !== 'false',
+            enabled: settings.enabled === 'true',
             imageUrl: settings.image_url || '',
-            title: settings.title || 'Support DJ Musta',
-            message: settings.message || 'Discover more music on DJ Musta.',
+            title: settings.title || '',
+            message: settings.message || '',
             linkUrl: settings.link_url || ''
         });
+    }
+
+    // POST /api/admin/settings/download-ad-upload - Upload advert image
+    if (method === 'POST' && pathname === '/api/admin/settings/download-ad-upload') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const { files } = await parseMultipart(req);
+        const advert = files.advert;
+        if (!advert?.data?.length) return J(400, { error: 'Advert image required' });
+        if (!advert.mimetype.startsWith('image/')) return J(400, { error: 'Only image files are allowed' });
+        if (advert.data.length > 5 * 1024 * 1024) return J(400, { error: 'Image too large. Max 5MB.' });
+        const imageUrl = await r2Upload(advert, 'adverts');
+        await query(`
+            INSERT INTO site_settings (key, value, updated_at) VALUES ('download_ad_image_url', $1, NOW())
+            ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()
+        `, [imageUrl]);
+        return J(200, { success: true, imageUrl });
     }
 
     // PATCH /api/admin/settings/download-ad - Update download advert settings
