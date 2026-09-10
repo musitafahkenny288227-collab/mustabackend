@@ -651,30 +651,25 @@ async function initDB() {
     // Add album column if missing
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT ''`);
 
-    // Seed admin - ensure musitafahkenny288227@gmail.com is admin
-    // SECURITY: Use ADMIN_SEED_PASSWORD env var. Fallback only used on first-run
-    // when no env var is set; set ADMIN_SEED_PASSWORD in Render environment variables.
+    // Seed admin - only on first run (when admin account doesn't exist yet)
+    // SECURITY: Use ADMIN_SEED_PASSWORD env var on Render.
     const adminSeedPassword = process.env.ADMIN_SEED_PASSWORD;
     if (!adminSeedPassword) {
-        console.warn('⚠️  ADMIN_SEED_PASSWORD env var not set — admin password seeding skipped. Set it on Render to seed the admin account.');
+        console.warn('⚠️  ADMIN_SEED_PASSWORD env var not set — admin seeding skipped. Set it on Render.');
     } else {
-        const hashed = hashPassword(adminSeedPassword);
-    
-        // First, update existing user if exists
         const existing = await query('SELECT id FROM users WHERE email=$1', ['musitafahkenny288227@gmail.com']);
-        if (existing.rows.length > 0) {
-            await query(
-                'UPDATE users SET username=$1, password=$2, is_admin=TRUE WHERE email=$3',
-                ['MUSTA', hashed, 'musitafahkenny288227@gmail.com']
-            );
-            console.log('✅ Admin updated: musitafahkenny288227@gmail.com (is_admin=TRUE)');
-        } else {
-            // Insert new admin
+        if (existing.rows.length === 0) {
+            // First run — create the admin account
+            const hashed = hashPassword(adminSeedPassword);
             await query(
                 'INSERT INTO users (username, email, password, is_admin) VALUES ($1,$2,$3,TRUE)',
                 ['MUSTA', 'musitafahkenny288227@gmail.com', hashed]
             );
             console.log('✅ Admin created: musitafahkenny288227@gmail.com (is_admin=TRUE)');
+        } else {
+            // Admin already exists — ensure is_admin flag is set but never overwrite password
+            await query('UPDATE users SET is_admin=TRUE WHERE email=$1', ['musitafahkenny288227@gmail.com']);
+            console.log('✅ Admin account verified: musitafahkenny288227@gmail.com');
         }
     }
 
@@ -776,8 +771,7 @@ const ALLOWED_ORIGINS = [
     'https://main.djmusta.pages.dev',
     'https://weathered-cherry-0a9e.musitafahkenny288227.workers.dev',
     FRONTEND_URL,
-    'http://localhost:5000',
-    'http://localhost:3000'
+    ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:5000', 'http://localhost:3000'] : [])
 ].map(normalizeOrigin).filter(Boolean);
 
 // Allow all *.djmusta.pages.dev preview URLs
@@ -1246,6 +1240,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin) {
                 await query('UPDATE users SET profile_photo=$1 WHERE id=$2', [photoUrl, u.id]);
                 u.profile_photo = photoUrl;
             }
+            // Update last_login on every sign-in
+            await query('UPDATE users SET last_login=NOW() WHERE id=$1', [u.id]);
             const tkn = signJWT({ id:u.id, username:u.username, email:u.email, isAdmin:!!u.is_admin });
             return J(200, { token:tkn, user:pub(u) });
         } else {
@@ -1398,25 +1394,30 @@ if (method === 'GET' && pathname === '/api/songs') {
         };
 
         // When searching, sort by relevance
-        // ORDER BY params are kept separate from WHERE params to avoid count query conflicts
-        let order;
-        let orderParams = [];
+        // ORDER BY uses parameterized values — no string interpolation to prevent SQL injection
         if (search) {
-            const s = search.toLowerCase().replace(/'/g, "''"); // safe: only escaping single quotes for LIKE
+            const si = idx;
+            params.push(
+                search.toLowerCase(),
+                search.toLowerCase() + '%',
+                '%' + search.toLowerCase() + '%'
+            );
             order = `CASE
-                WHEN LOWER(s.title) = '${s}' THEN 1
-                WHEN LOWER(s.title) LIKE '${s}%' THEN 2
-                WHEN LOWER(s.artist) = '${s}' THEN 3
-                WHEN LOWER(s.artist) LIKE '${s}%' THEN 4
-                WHEN LOWER(s.title) LIKE '%${s}%' THEN 5
+                WHEN LOWER(s.title)  = ${si}     THEN 1
+                WHEN LOWER(s.title)  LIKE ${si+1} THEN 2
+                WHEN LOWER(s.artist) = ${si}     THEN 3
+                WHEN LOWER(s.artist) LIKE ${si+1} THEN 4
+                WHEN LOWER(s.title)  LIKE ${si+2} THEN 5
                 ELSE 6
             END, s.play_count DESC`;
+            idx += 3;
         } else {
             order = orderMap[sortParam] || orderMap[category] || 'created_at DESC';
         }
 
         // Count query â€” no ORDER BY
-        const total = await query(`SELECT COUNT(*) FROM songs ${where}`, params);
+        const countParams = search ? params.slice(0, idx - 3) : params;
+        const total = await query(`SELECT COUNT(*) FROM songs ${where}`, countParams);
 
         // Data query â€” with ORDER BY, LIMIT, OFFSET
         const dataParams = [...params, limit, offset];
