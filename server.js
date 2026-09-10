@@ -650,6 +650,8 @@ async function initDB() {
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS producer TEXT DEFAULT ''`);
     // Add album column if missing
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT ''`);
+    // Add description column if missing
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''`);
 
     // Seed admin - only on first run (when admin account doesn't exist yet)
     // SECURITY: Use ADMIN_SEED_PASSWORD env var on Render.
@@ -1449,16 +1451,16 @@ if (method === 'GET' && pathname === '/api/songs') {
     // POST /api/songs/admin/add - Admin quick-add a song by direct URL (JSON body)
     if (method === 'POST' && pathname === '/api/songs/admin/add') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const { title, artist, genre, duration, file_path, cover_path, lyrics, release_year, releaseYear, album } = await parseJSON(req);
+        const { title, artist, genre, duration, file_path, cover_path, lyrics, description, release_year, releaseYear, album } = await parseJSON(req);
         if (!title || !artist) return J(400, { error:'title and artist are required' });
         if (!file_path) return J(400, { error:'file_path (audio URL) is required' });
         const yr = release_year || releaseYear || new Date().getFullYear();
         const albumName = (album || '').trim();
         const r = await query(
-            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, album, release_year, approved, uploaded_by, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,NOW()) RETURNING *`,
+            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, description, album, release_year, approved, uploaded_by, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,NOW()) RETURNING *`,
             [title.trim(), artist.trim(), genre||'Other', duration||'0:00',
-             file_path.trim(), cover_path||null, lyrics||'', albumName || null, yr, user.id]
+             file_path.trim(), cover_path||null, lyrics||'', description||'', albumName || null, yr, user.id]
         );
         const song = r.rows[0];
         pingSearchEngines().catch(() => {});
@@ -1514,6 +1516,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         const { fields, files } = await parseMultipart(req);
         const { title, artist, genre, duration, lyrics } = fields;
         const album = (fields.album || '').trim();
+        const description = (fields.description || '').trim();
         const producer    = (fields.producer || '').trim();
         const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
         if (!title?.trim())  return J(400, { error:'Title required' });
@@ -1539,8 +1542,8 @@ if (method === 'GET' && pathname === '/api/songs') {
         }
 
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
         );
         const newSong = r.rows[0];
         // Ping search engines after admin-approved uploads
@@ -1761,7 +1764,7 @@ if (method === 'GET' && pathname === '/api/songs') {
     if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
-        const allowed = ['title','artist','genre','duration','lyrics','release_year','album',
+        const allowed = ['title','artist','genre','duration','lyrics','description','release_year','album',
                          'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer','video_url'];
         const sets = []; const vals = [];
         for (const key of allowed) {
@@ -3204,6 +3207,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         const { fields, files } = await parseMultipart(req);
 
         const { title, artist, genre, duration, lyrics, video_url } = fields;
+        const description = (fields.description || '').trim();
         const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
         const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
@@ -3236,10 +3240,10 @@ if (method === 'GET' && pathname === '/api/songs') {
         }
 
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9,$10,$11,$12) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,$13) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
+             lyrics||'', description, filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
         );
         const newSong = r.rows[0];
 
