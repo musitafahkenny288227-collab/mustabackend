@@ -58,17 +58,17 @@ function buildXml(songs) {
     ).join('\n');
 
     const seenSongUrls = new Set();
-    const songUrls = songs.filter(s => {
+    const songUrls = songs.map(s => {
         const titleSlug  = createSlug(s.title)  || `song-${s.id}`;
         const artistSlug = createSlug(s.artist) || 'unknown';
-        const songUrl    = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
-        if (seenSongUrls.has(songUrl)) return false;
+        let songUrl = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
+        // If slug collision, append the id to make it unique
+        if (seenSongUrls.has(songUrl)) {
+            songUrl = `${SITE_URL}/song/${titleSlug}-${s.id}/${artistSlug}`;
+        }
         seenSongUrls.add(songUrl);
-        return true;
-    }).map(s => {
-        const titleSlug  = createSlug(s.title)  || `song-${s.id}`;
-        const artistSlug = createSlug(s.artist) || 'unknown';
-        const songUrl    = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
+        return { s, songUrl };
+    }).map(({ s, songUrl }) => {
         const lastmod    = s.created_at ? new Date(s.created_at).toISOString().split('T')[0] : today;
         const priority   = (s.release_year >= 2026 || s.lyrics) ? '0.9' : '0.8';
         const changefreq = s.release_year >= 2026 ? 'weekly' : 'monthly';
