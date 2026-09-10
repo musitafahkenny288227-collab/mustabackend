@@ -1394,7 +1394,8 @@ if (method === 'GET' && pathname === '/api/songs') {
         };
 
         // When searching, sort by relevance
-        // ORDER BY uses parameterized values — no string interpolation to prevent SQL injection
+        // ORDER BY uses parameterized values to prevent SQL injection
+        let order;
         if (search) {
             const si = idx;
             params.push(
@@ -1402,21 +1403,20 @@ if (method === 'GET' && pathname === '/api/songs') {
                 search.toLowerCase() + '%',
                 '%' + search.toLowerCase() + '%'
             );
-            order = `CASE
-                WHEN LOWER(s.title)  = ${si}     THEN 1
-                WHEN LOWER(s.title)  LIKE ${si+1} THEN 2
-                WHEN LOWER(s.artist) = ${si}     THEN 3
-                WHEN LOWER(s.artist) LIKE ${si+1} THEN 4
-                WHEN LOWER(s.title)  LIKE ${si+2} THEN 5
-                ELSE 6
-            END, s.play_count DESC`;
+            order = 'CASE' +
+                ' WHEN LOWER(s.title)  = $'  + si     + ' THEN 1' +
+                ' WHEN LOWER(s.title)  LIKE $' + (si+1) + ' THEN 2' +
+                ' WHEN LOWER(s.artist) = $'  + si     + ' THEN 3' +
+                ' WHEN LOWER(s.artist) LIKE $' + (si+1) + ' THEN 4' +
+                ' WHEN LOWER(s.title)  LIKE $' + (si+2) + ' THEN 5' +
+                ' ELSE 6 END, s.play_count DESC';
             idx += 3;
         } else {
             order = orderMap[sortParam] || orderMap[category] || 'created_at DESC';
         }
 
-        // Count query â€” no ORDER BY
-        const countParams = search ? params.slice(0, idx - 3) : params;
+        // Count query uses only WHERE params (not ORDER BY scoring params)
+        const countParams = search ? params.slice(0, idx - 3) : params.slice();
         const total = await query(`SELECT COUNT(*) FROM songs ${where}`, countParams);
 
         // Data query â€” with ORDER BY, LIMIT, OFFSET
