@@ -764,6 +764,21 @@ function getUser(req) {
 // ============================================================
 const normalizeOrigin = origin => (origin || '').replace(/\/$/, '');
 
+const LOCALHOST_ORIGINS = [
+    'http://localhost:5000',
+    'http://localhost:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:5000',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8000',
+    'https://localhost:5000',
+    'https://localhost:3000',
+    'https://localhost:8000',
+    'https://127.0.0.1:5000',
+    'https://127.0.0.1:3000',
+    'https://127.0.0.1:8000'
+].map(normalizeOrigin).filter(Boolean);
+
 const ALLOWED_ORIGINS = [
     'https://djmusta.com',
     'https://www.djmusta.com',
@@ -771,14 +786,15 @@ const ALLOWED_ORIGINS = [
     'https://main.djmusta.pages.dev',
     'https://weathered-cherry-0a9e.musitafahkenny288227.workers.dev',
     FRONTEND_URL,
-    ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:5000', 'http://localhost:3000'] : [])
+    ...LOCALHOST_ORIGINS
 ].map(normalizeOrigin).filter(Boolean);
 
-// Allow all *.djmusta.pages.dev preview URLs
+// Allow all *.djmusta.pages.dev preview URLs and localhost development origins
 function isAllowedOrigin(origin) {
     origin = normalizeOrigin(origin);
     if (!origin) return false;
     if (ALLOWED_ORIGINS.includes(origin)) return true;
+    if (/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin)) return true;
     // Allow all Cloudflare Pages preview deployments
     if (origin.match(/^https:\/\/[a-z0-9]+\.djmusta\.pages\.dev$/)) return true;
     return false;
@@ -1086,17 +1102,17 @@ const server = http.createServer(async (req, res) => {
   </url>`).join('\n');
 
             const seenSongUrls = new Set();
-            const songUrls = songs.rows.filter(s => {
-                const titleSlug  = toSlug(s.title);
-                const artistSlug = toSlug(s.artist);
-                const songUrl    = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
-                if (seenSongUrls.has(songUrl)) return false;
+            const songUrls = songs.rows.map(s => {
+                const titleSlug  = toSlug(s.title) || `song-${s.id}`;
+                const artistSlug = toSlug(s.artist) || 'unknown';
+                let songUrl = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
+                // If slug collision, append the id to make it unique
+                if (seenSongUrls.has(songUrl)) {
+                    songUrl = `https://djmusta.com/song/${titleSlug}-${s.id}/${artistSlug}`;
+                }
                 seenSongUrls.add(songUrl);
-                return true;
-            }).map(s => {
-                const titleSlug  = toSlug(s.title);
-                const artistSlug = toSlug(s.artist);
-                const songUrl    = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
+                return { s, songUrl };
+            }).map(({ s, songUrl }) => {
                 const lastmod    = s.created_at ? new Date(s.created_at).toISOString().split('T')[0] : today;
                 const esc        = str => (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                 const coverUrl   = s.cover_image || s.cover_path || '';
