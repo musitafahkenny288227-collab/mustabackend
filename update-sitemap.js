@@ -43,8 +43,6 @@ function buildXml(songs) {
         { loc: `${SITE_URL}/top-artists`,      changefreq: 'weekly',  priority: '0.90' },
         { loc: `${SITE_URL}/nonstops`,         changefreq: 'weekly',  priority: '0.88' },
         { loc: `${SITE_URL}/gospel`,           changefreq: 'weekly',  priority: '0.88' },
-        { loc: `${SITE_URL}/dancehall`,        changefreq: 'weekly',  priority: '0.88' },
-        { loc: `${SITE_URL}/afrobeat`,         changefreq: 'weekly',  priority: '0.88' },
         { loc: `${SITE_URL}/artist-upload`,    changefreq: 'monthly', priority: '0.80' },
         { loc: `${SITE_URL}/about`,            changefreq: 'monthly', priority: '0.60' },
         { loc: `${SITE_URL}/contact`,          changefreq: 'monthly', priority: '0.60' },
