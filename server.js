@@ -2048,11 +2048,13 @@ if (method === 'GET' && pathname === '/api/songs') {
 
     // GET /api/artists - Get all artists with photo, bio, song count
     if (method === 'GET' && pathname === '/api/artists') {
+        const limitVal = Math.min(parseInt(q.get('limit') || 200), 500);
         const artists = await query(`
             SELECT
                 INITCAP(LOWER(s.artist)) AS name,
                 COUNT(s.id)::int AS song_count,
                 MAX(s.play_count) AS top_plays,
+                MODE() WITHIN GROUP (ORDER BY s.genre) AS genre,
                 CASE 
                     WHEN MAX(a.photo_url) IS NOT NULL AND MAX(a.photo_url) NOT LIKE 'data:%' 
                     THEN MAX(a.photo_url)
@@ -2071,9 +2073,8 @@ if (method === 'GET' && pathname === '/api/songs') {
             WHERE s.approved = TRUE
             GROUP BY LOWER(s.artist)
             ORDER BY song_count DESC, LOWER(s.artist)
-        `);
-        // Artist photos and verification state can change from the profile editor;
-        // do not serve a stale public list after an upload.
+            LIMIT $1
+        `, [limitVal]);
         return J(200, { artists: artists.rows });
     }
 
