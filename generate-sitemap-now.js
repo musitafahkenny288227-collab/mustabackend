@@ -30,7 +30,7 @@ async function main() {
         
         if (success) {
             console.log('✅ Sitemap generated successfully!');
-            console.log(`📍 Location: ${process.env.SITEMAP_PATH || '../DEPLOY-THIS/sitemap.xml'}`);
+            console.log(`📍 Location: ${process.env.SITEMAP_PATH || '../frontend/sitemap.xml'}`);
             console.log(`📊 Total entries: ${songs.length + 1} (homepage + ${songs.length} songs)`);
         } else {
             console.error('❌ Failed to generate sitemap');
