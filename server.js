@@ -1370,7 +1370,7 @@ if (method === 'GET' && pathname === '/api/songs') {
         const genre    = q.get('genre') || '';
         const uploader = q.get('uploader') || '';
         const sortParam = q.get('sort') || '';
-        const limit    = Math.min(parseInt(q.get('limit') || 20), 100);
+        const limit    = Math.min(parseInt(q.get('limit') || 20), 500);
         const offset   = parseInt(q.get('offset') || 0);
 
         let where  = 'WHERE approved=TRUE';
