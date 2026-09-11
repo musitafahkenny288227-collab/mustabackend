@@ -18,5 +18,8 @@
     "nodemailer": "^9.0.5",
     "pg": "^8.11.3",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.0"
   }
 }
