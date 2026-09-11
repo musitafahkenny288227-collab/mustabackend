@@ -2054,7 +2054,7 @@ if (method === 'GET' && pathname === '/api/songs') {
                 INITCAP(LOWER(s.artist)) AS name,
                 COUNT(s.id)::int AS song_count,
                 MAX(s.play_count) AS top_plays,
-                MODE() WITHIN GROUP (ORDER BY s.genre) AS genre,
+                (SELECT s2.genre FROM songs s2 WHERE LOWER(s2.artist) = LOWER(s.artist) AND s2.approved = TRUE AND s2.genre IS NOT NULL ORDER BY s2.play_count DESC LIMIT 1) AS genre,
                 CASE 
                     WHEN MAX(a.photo_url) IS NOT NULL AND MAX(a.photo_url) NOT LIKE 'data:%' 
                     THEN MAX(a.photo_url)
