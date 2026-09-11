@@ -1086,12 +1086,18 @@ const server = http.createServer(async (req, res) => {
 
             // Group: homepage + static pages + all songs
             const staticPages = [
-                { loc: 'https://djmusta.com',              changefreq: 'daily',   priority: '1.0' },
-                { loc: 'https://djmusta.com/new-music',    changefreq: 'daily',   priority: '0.9' },
-                { loc: 'https://djmusta.com/top-songs',    changefreq: 'daily',   priority: '0.9' },
-                { loc: 'https://djmusta.com/top-artists',  changefreq: 'weekly',  priority: '0.8' },
-                { loc: 'https://djmusta.com/gospel',       changefreq: 'weekly',  priority: '0.8' },
-                { loc: 'https://djmusta.com/nonstops',     changefreq: 'weekly',  priority: '0.8' },
+                { loc: 'https://djmusta.com',                  changefreq: 'daily',   priority: '1.0' },
+                { loc: 'https://djmusta.com/new-music',        changefreq: 'daily',   priority: '0.95' },
+                { loc: 'https://djmusta.com/top-songs',        changefreq: 'weekly',  priority: '0.92' },
+                { loc: 'https://djmusta.com/top-artists',      changefreq: 'weekly',  priority: '0.90' },
+                { loc: 'https://djmusta.com/nonstops',         changefreq: 'weekly',  priority: '0.88' },
+                { loc: 'https://djmusta.com/gospel',           changefreq: 'weekly',  priority: '0.88' },
+                { loc: 'https://djmusta.com/artist-upload',    changefreq: 'monthly', priority: '0.80' },
+                { loc: 'https://djmusta.com/about',            changefreq: 'monthly', priority: '0.60' },
+                { loc: 'https://djmusta.com/contact',          changefreq: 'monthly', priority: '0.60' },
+                { loc: 'https://djmusta.com/copyright',        changefreq: 'yearly',  priority: '0.40' },
+                { loc: 'https://djmusta.com/privacy-policy',   changefreq: 'yearly',  priority: '0.30' },
+                { loc: 'https://djmusta.com/terms',            changefreq: 'yearly',  priority: '0.30' },
             ];
 
             const today = new Date().toISOString().split('T')[0];
