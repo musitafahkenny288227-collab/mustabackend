@@ -208,6 +208,8 @@ const ALLOWED_AUDIO_MIME = new Set(['audio/mpeg','audio/mp3','audio/wav','audio/
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg','image/jpg','image/png','image/webp','image/gif']);
 const ALLOWED_AUDIO_EXT  = new Set(['.mp3','.wav','.m4a']);
 const ALLOWED_IMAGE_EXT  = new Set(['.jpg','.jpeg','.png','.webp','.gif']);
+const MAX_AUDIO_FILE_SIZE = 200 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
 
 function getMagicType(buf) {
     if (!buf || buf.length < 12) return null;
@@ -252,8 +254,8 @@ function validateFile(fileObj, type) {
         if (!IMAGE_MAGIC.has(magic)) return `File content does not match an image.`;
     }
 
-    const maxSize = type === 'audio' ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
-    if (buf.length > maxSize) return `File too large. Max ${type === 'audio' ? '50MB' : '5MB'}.`;
+    const maxSize = type === 'audio' ? MAX_AUDIO_FILE_SIZE : MAX_IMAGE_FILE_SIZE;
+    if (buf.length > maxSize) return `File too large. Max ${type === 'audio' ? '200MB' : '5MB'}.`;
     return null;
 }
 
@@ -1278,9 +1280,16 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             idx += 4;
         }
         if (genre) {
-            where += ` AND LOWER(genre) = $${idx}`;
-            params.push(genre.toLowerCase());
-            idx++;
+            const normalizedGenre = (genre || '').trim().toLowerCase();
+            if (normalizedGenre === 'nonstops' || normalizedGenre.includes('nonstop') || normalizedGenre.includes('mix')) {
+                where += ` AND (LOWER(COALESCE(genre, '')) LIKE $${idx} OR LOWER(COALESCE(genre, '')) LIKE $${idx + 1} OR LOWER(COALESCE(genre, '')) LIKE $${idx + 2})`;
+                params.push('%nonstop%', '%mix%', '%mixtape%');
+                idx += 3;
+            } else {
+                where += ` AND LOWER(genre) = $${idx}`;
+                params.push(normalizedGenre);
+                idx++;
+            }
         }
         if (uploader) {
             where += ` AND uploaded_by = $${idx}`;
@@ -2752,15 +2761,17 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
         const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
+        const songFile = files.song || files.audio || files.file || null;
+        const coverFile = files.cover || files.image || files.coverImage || null;
 
         if (!title?.trim())  return J(400, { error: 'Song title is required' });
         if (!artist?.trim()) return J(400, { error: 'Artist name is required' });
-        if (!files.song)     return J(400, { error: 'Audio file (MP3) is required' });
+        if (!songFile)      return J(400, { error: 'Audio file (MP3) is required' });
 
-        const audioErr = validateFile(files.song, 'audio');
+        const audioErr = validateFile(songFile, 'audio');
         if (audioErr) return J(400, { error: audioErr });
-        if (files.cover) {
-            const imgErr = validateFile(files.cover, 'image');
+        if (coverFile) {
+            const imgErr = validateFile(coverFile, 'image');
             if (imgErr) return J(400, { error: imgErr });
         }
 
@@ -2772,8 +2783,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         let filePath, coverPath;
         const DEFAULT_COVER_URL = `${R2_PUBLIC_URL}/covers/default-cover.svg`;
         try {
-            filePath  = await r2Upload(files.song, 'songs');
-            coverPath = files.cover ? await r2Upload(files.cover, 'covers') : DEFAULT_COVER_URL;
+            filePath  = await r2Upload(songFile, 'songs');
+            coverPath = coverFile ? await r2Upload(coverFile, 'covers') : DEFAULT_COVER_URL;
         } catch(e) {
             return J(500, { error: 'File upload failed: ' + e.message });
         }
