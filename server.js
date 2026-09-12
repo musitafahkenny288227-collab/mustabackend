@@ -1644,11 +1644,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         } else {
             await query('INSERT INTO likes (user_id,song_id) VALUES ($1,$2)', [user.id, songId]);
             await query('UPDATE songs SET like_count=like_count+1 WHERE id=$1', [songId]);
-            const updated = await query('SELECT like_count FROM songs WHERE id=$1', [songId]);
-            return J(200, { liked:true, likeCount: updated.rows[0].like_count });
+            const updated2 = await query('SELECT like_count FROM songs WHERE id=$1', [songId]);
+            return J(200, { liked:true, likeCount: updated2.rows[0].like_count });
         }
     }
-
     // ── DOWNLOAD TRACK (✅ FIX #4: rate limited) ────────────
     if (method === 'POST' && seg[0]==='songs' && seg[2]==='download') {
         if (downloadRateLimit(ip)) return J(429, { error: 'Slow down' });
@@ -1874,29 +1873,37 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     if (method === 'GET' && pathname === '/api/artists') {
         const limitVal = Math.min(parseInt(q.get('limit') || 200), 500);
         const artists = await query(`
-            SELECT
-                INITCAP(LOWER(s.artist)) AS name,
-                COUNT(s.id)::int AS song_count,
-                MAX(s.play_count) AS top_plays,
-                (SELECT s2.genre FROM songs s2 WHERE LOWER(s2.artist) = LOWER(s.artist) AND s2.approved = TRUE AND s2.genre IS NOT NULL ORDER BY s2.play_count DESC LIMIT 1) AS genre,
-                CASE
-                    WHEN MAX(a.photo_url) IS NOT NULL AND MAX(a.photo_url) NOT LIKE 'data:%'
-                    THEN MAX(a.photo_url)
-                    WHEN MAX(a.photo_url) LIKE 'data:%'
-                    THEN 'has_photo'
-                    ELSE NULL
-                END AS photo_url,
-                MAX(a.bio) AS bio,
-                MAX(a.instagram) AS instagram,
-                MAX(a.twitter) AS twitter,
-                MAX(a.facebook) AS facebook,
-                bool_or(vr.status = 'approved') AS is_verified
-            FROM songs s
-            LEFT JOIN artists a ON LOWER(a.name) = LOWER(s.artist)
-            LEFT JOIN verification_requests vr ON LOWER(vr.artist_name) = LOWER(s.artist) AND vr.status = 'approved'
-            WHERE s.approved = TRUE
-            GROUP BY LOWER(s.artist)
-            ORDER BY song_count DESC, LOWER(s.artist)
+            WITH artist_summary AS (
+                SELECT
+                    LOWER(s.artist) AS artist_key,
+                    INITCAP(LOWER(s.artist)) AS name,
+                    COUNT(s.id)::int AS song_count,
+                    MAX(s.play_count)::int AS top_plays,
+                    MAX(CASE WHEN s2.genre IS NOT NULL THEN s2.genre END) AS genre,
+                    MAX(CASE WHEN a.photo_url IS NOT NULL AND a.photo_url NOT LIKE 'data:%' THEN a.photo_url END) AS photo_url,
+                    MAX(a.bio) AS bio,
+                    MAX(a.instagram) AS instagram,
+                    MAX(a.twitter) AS twitter,
+                    MAX(a.facebook) AS facebook,
+                    bool_or(vr.status = 'approved') AS is_verified
+                FROM songs s
+                LEFT JOIN artists a ON LOWER(a.name) = LOWER(s.artist)
+                LEFT JOIN verification_requests vr ON LOWER(vr.artist_name) = LOWER(s.artist) AND vr.status = 'approved'
+                LEFT JOIN LATERAL (
+                    SELECT s2.genre
+                    FROM songs s2
+                    WHERE LOWER(s2.artist) = LOWER(s.artist)
+                      AND s2.approved = TRUE
+                      AND s2.genre IS NOT NULL
+                    ORDER BY s2.play_count DESC NULLS LAST
+                    LIMIT 1
+                ) s2 ON TRUE
+                WHERE s.approved = TRUE
+                GROUP BY LOWER(s.artist)
+            )
+            SELECT *
+            FROM artist_summary
+            ORDER BY song_count DESC, artist_key
             LIMIT $1
         `, [limitVal]);
         return JC(200, { artists: artists.rows }, 300);
