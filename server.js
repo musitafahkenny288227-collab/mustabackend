@@ -192,6 +192,17 @@ function downloadRateLimit(ip) { return rateLimit(ip + ':dl', 20, 60000); }
 function streamRateLimit(ip)   { return rateLimit(ip + ':stream', 60, 60000); }
 function uploadRateLimit(ip)   { return rateLimit(ip + ':upload', 15, 60000); }
 
+async function logAdminAction(adminUserId, action, details = '', entityType = '', entityId = null) {
+    try {
+        await query(
+            'INSERT INTO admin_activity (admin_user_id, action, details, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)',
+            [adminUserId || null, action, String(details || '').substring(0, 2000), entityType || '', entityId || null]
+        );
+    } catch (err) {
+        console.warn('[Audit] log failed:', err.message);
+    }
+}
+
 // ============================================================
 // FILE TYPE VALIDATION
 // ============================================================
@@ -500,6 +511,15 @@ async function initDB() {
         reviewed_at TIMESTAMP,
         reviewed_by INTEGER REFERENCES users(id),
         admin_notes TEXT
+    )`);
+    await query(`CREATE TABLE IF NOT EXISTS admin_activity (
+        id SERIAL PRIMARY KEY,
+        admin_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        details TEXT DEFAULT '',
+        entity_type TEXT DEFAULT '',
+        entity_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
 
     // Add missing columns
@@ -1555,7 +1575,11 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── APPROVE SONG ───────────────────────────────────────
     if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='approve') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const songInfo = await query('SELECT title FROM songs WHERE id=$1', [seg[1]]);
         await query('UPDATE songs SET approved=TRUE WHERE id=$1', [seg[1]]);
+        if (songInfo.rows[0]) {
+            await logAdminAction(user.id, 'approve_song', `Approved song "${songInfo.rows[0].title}"`, 'song', seg[1]);
+        }
 
         try {
             const songData = await query('SELECT s.*, u.email as uploader_email, u.username as uploader_name FROM songs s LEFT JOIN users u ON s.uploaded_by=u.id WHERE s.id=$1', [seg[1]]);
@@ -1600,7 +1624,11 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── REJECT SONG ────────────────────────────────────────
     if (method === 'PATCH' && seg[0]==='songs' && seg[2]==='reject') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const songInfo = await query('SELECT title FROM songs WHERE id=$1', [seg[1]]);
         await query('UPDATE songs SET approved=FALSE WHERE id=$1', [seg[1]]);
+        if (songInfo.rows[0]) {
+            await logAdminAction(user.id, 'reject_song', `Rejected song "${songInfo.rows[0].title}"`, 'song', seg[1]);
+        }
         return J(200, { success:true });
     }
 
@@ -1626,6 +1654,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
         vals.push(seg[1]);
         await query('UPDATE songs SET '+sets.join(', ')+' WHERE id=$'+vals.length, vals);
+        await logAdminAction(user.id, 'edit_song', `Updated song metadata`, 'song', seg[1]);
         return J(200, { success:true });
     }
 
@@ -1634,7 +1663,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const { song_id } = await parseJSON(req);
         await query('UPDATE songs SET is_song_of_day=FALSE WHERE is_song_of_day=TRUE');
-        if (song_id) await query('UPDATE songs SET is_song_of_day=TRUE WHERE id=$1', [song_id]);
+        if (song_id) {
+            const songInfo = await query('SELECT title FROM songs WHERE id=$1', [song_id]);
+            await query('UPDATE songs SET is_song_of_day=TRUE WHERE id=$1', [song_id]);
+            if (songInfo.rows[0]) {
+                await logAdminAction(user.id, 'set_song_of_day', `Set song of the day to "${songInfo.rows[0].title}"`, 'song', song_id);
+            }
+        }
         return J(200, { success:true });
     }
 
@@ -1823,7 +1858,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     if (method === 'PATCH' && seg[0]==='songs' && seg[1]==='admin' && seg[2]==='users' && seg[4]==='admin') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
-        await query('UPDATE users SET is_admin=$1 WHERE id=$2', [!!body.isAdmin, seg[3]]);
+        const adminState = !!body.isAdmin;
+        await query('UPDATE users SET is_admin=$1 WHERE id=$2', [adminState, seg[3]]);
+        await logAdminAction(user.id, adminState ? 'grant_admin' : 'remove_admin', `${adminState ? 'Granted admin access' : 'Removed admin access'} to user #${seg[3]}`, 'user', seg[3]);
         return J(200, { success:true });
     }
 
@@ -2186,6 +2223,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
         await query('UPDATE verification_requests SET status=$1, reviewed_at=NOW(), reviewed_by=$2, admin_notes=$3 WHERE id=$4',
             [status, user.id, adminNotes, requestId]);
+        await logAdminAction(user.id, action === 'approve' ? 'approve_verification' : 'reject_verification', `${action === 'approve' ? 'Approved' : 'Rejected'} verification request #${requestId} for ${request.rows[0].artist_name}`, 'verification', requestId);
 
         const notifTitle = action === 'approve' ? '✅ Verification Approved!' : '❌ Verification Rejected';
         const notifMessage = action === 'approve'
@@ -2348,6 +2386,17 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             topArtists: topArtists.rows,
             uploadGrowth: uploadGrowth.rows
         });
+    }
+    if (method === 'GET' && pathname === '/api/admin/activity') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const r = await query(`
+            SELECT aa.*, u.username AS admin_username
+            FROM admin_activity aa
+            LEFT JOIN users u ON aa.admin_user_id = u.id
+            ORDER BY aa.created_at DESC
+            LIMIT 100
+        `);
+        return J(200, { activity: r.rows });
     }
 
     if (method === 'GET' && pathname === '/api/artist/stats') {
