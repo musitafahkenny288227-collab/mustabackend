@@ -30,10 +30,24 @@ function esc(str) {
     return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function sanitizeSongsForSitemap(songs = []) {
+    const list = Array.isArray(songs) ? songs : [];
+    const valid = list.filter(s => {
+        if (!s) return false;
+        return String(s.title || '').trim().length > 0 && String(s.artist || '').trim().length > 0;
+    });
+    const skipped = list.length - valid.length;
+    if (skipped > 0) {
+        console.warn(`[Sitemap] Skipped ${skipped} invalid song record(s) without title/artist while generating sitemap.`);
+    }
+    return valid;
+}
+
 // ============================================================
 // BUILD XML
 // ============================================================
 function buildXml(songs) {
+    const validSongs = sanitizeSongsForSitemap(songs);
     const today = new Date().toISOString().split('T')[0];
 
     const staticPages = [
@@ -56,7 +70,7 @@ function buildXml(songs) {
     ).join('\n');
 
     const seenSongUrls = new Set();
-    const songUrls = songs.map(s => {
+    const songUrls = validSongs.map(s => {
         const titleSlug  = createSlug(s.title)  || `song-${s.id}`;
         const artistSlug = createSlug(s.artist) || 'unknown';
         let songUrl = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
@@ -94,7 +108,7 @@ function buildXml(songs) {
 
 ${staticUrls}
 
-  <!-- Song pages (${songs.length} songs) -->
+  <!-- Song pages (${validSongs.length} valid songs) -->
 ${songUrls}
 </urlset>`;
 }
@@ -105,9 +119,13 @@ ${songUrls}
 // ============================================================
 function generateSitemap(songs) {
     try {
-        const xml = buildXml(songs);
+        const validSongs = sanitizeSongsForSitemap(songs);
+        const xml = buildXml(validSongs);
         fs.writeFileSync(SITEMAP_PATH, xml, 'utf8');
-        console.log(`[Sitemap] ✅ Written to ${SITEMAP_PATH} — ${songs.length} songs + static pages`);
+        console.log(`[Sitemap] ✅ Written to ${SITEMAP_PATH} — ${validSongs.length} valid song URLs + static pages`);
+        if (Array.isArray(songs) && songs.length !== validSongs.length) {
+            console.warn(`[Sitemap] Input songs: ${songs.length}. Valid songs for sitemap: ${validSongs.length}.`);
+        }
         return true;
     } catch (e) {
         console.error('[Sitemap] ❌ Write error:', e.message);
