@@ -1572,8 +1572,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 }
 
                 const r = await query(
-                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-                    [title, artist, genre, duration, '', filePath, coverPath, user.id, !!user.isAdmin]
+                    'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
+                    [title, artist, genre, duration, '', '', filePath, coverPath, user.id, !!user.isAdmin, null, new Date().getFullYear(), null]
                 );
                 results.push({ index: i, success: true, song: r.rows[0] });
             } catch(error) {
