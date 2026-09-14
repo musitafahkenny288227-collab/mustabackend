@@ -2151,9 +2151,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     // ── NOTIFICATIONS ──────────────────────────────────────
     if (method === 'GET' && pathname === '/api/notifications') {
-        if (!user) return J(401, { error:'Login required' });
-        const r = await query('SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50', [user.id]);
-        return J(200, { notifications: r.rows });
+        if (user) {
+            const r = await query('SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50', [user.id]);
+            return J(200, { notifications: r.rows, public: false });
+        }
+
+        const r = await query('SELECT * FROM notifications WHERE user_id=1 ORDER BY created_at DESC LIMIT 50');
+        return J(200, { notifications: r.rows, public: true });
     }
     if (method === 'PATCH' && seg[0]==='notifications' && seg[1] && seg[2]==='read') {
         if (!user) return J(401, { error:'Login required' });
@@ -2373,7 +2377,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── ADMIN STATS / ANALYTICS ────────────────────────────
     if (method === 'GET' && pathname === '/api/admin/stats') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const [songs, users, premium, plays, downloads, pending, comments, verifications] = await Promise.all([
+        const [songs, users, premium, plays, downloads, pending, comments, verifications, revenue] = await Promise.all([
             query('SELECT COUNT(*) FROM songs WHERE approved=TRUE'),
             query('SELECT COUNT(*) FROM users'),
             query('SELECT COUNT(*) FROM users WHERE is_premium=TRUE'),
@@ -2381,7 +2385,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             query('SELECT COALESCE(SUM(download_count),0) FROM songs WHERE approved=TRUE'),
             query('SELECT COUNT(*) FROM songs WHERE approved=FALSE'),
             query('SELECT COUNT(*) FROM comments'),
-            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'")
+            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'"),
+            query("SELECT COALESCE(SUM(amount),0)::numeric AS total_revenue FROM payments WHERE status='completed'")
         ]);
         return J(200, {
             songs: parseInt(songs.rows[0].count),
@@ -2392,7 +2397,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             pending: parseInt(pending.rows[0].count),
             comments: parseInt(comments.rows[0].count),
             verifications: parseInt(verifications.rows[0].count),
-            revenue: parseInt(premium.rows[0].count) * 10000
+            revenue: Number(revenue.rows[0].total_revenue || 0)
         });
     }
     if (method === 'GET' && pathname === '/api/admin/analytics') {
