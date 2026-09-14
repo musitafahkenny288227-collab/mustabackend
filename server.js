@@ -1038,6 +1038,10 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/sitemap.xml') {
         try {
             const songs = await query('SELECT id, title, artist, genre, cover_image, cover_path, created_at, release_year, lyrics, producer FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
+            const validSongs = (songs.rows || []).filter(s => s && String(s.title || '').trim() && String(s.artist || '').trim());
+            if ((songs.rows || []).length !== validSongs.length) {
+                console.warn(`[Sitemap] Approved songs: ${(songs.rows || []).length}. Valid songs for sitemap: ${validSongs.length}.`);
+            }
             const toSlug = str => str.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
 
             const staticPages = [
@@ -1064,7 +1068,7 @@ const server = http.createServer(async (req, res) => {
   </url>`).join('\n');
 
             const seenSongUrls = new Set();
-            const songUrls = songs.rows.map(s => {
+            const songUrls = validSongs.map(s => {
                 const titleSlug  = toSlug(s.title) || `song-${s.id}`;
                 const artistSlug = toSlug(s.artist) || 'unknown';
                 let songUrl = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
