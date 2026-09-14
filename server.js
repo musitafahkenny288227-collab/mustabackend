@@ -2152,21 +2152,31 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── NOTIFICATIONS ──────────────────────────────────────
     if (method === 'GET' && pathname === '/api/notifications') {
         if (user) {
-            const r = await query('SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50', [user.id]);
+            const r = await query(`
+                SELECT * FROM notifications
+                WHERE user_id IN ($1, 1)
+                ORDER BY created_at DESC
+                LIMIT 50
+            `, [user.id]);
             return J(200, { notifications: r.rows, public: false });
         }
 
-        const r = await query('SELECT * FROM notifications WHERE user_id=1 ORDER BY created_at DESC LIMIT 50');
+        const r = await query(`
+            SELECT * FROM notifications
+            WHERE user_id = 1
+            ORDER BY created_at DESC
+            LIMIT 50
+        `);
         return J(200, { notifications: r.rows, public: true });
     }
     if (method === 'PATCH' && seg[0]==='notifications' && seg[1] && seg[2]==='read') {
         if (!user) return J(401, { error:'Login required' });
-        await query('UPDATE notifications SET is_read=TRUE WHERE id=$1 AND user_id=$2', [seg[1], user.id]);
+        await query('UPDATE notifications SET is_read=TRUE WHERE id=$1 AND user_id IN ($2, 1)', [seg[1], user.id]);
         return J(200, { success:true });
     }
     if (method === 'PATCH' && pathname === '/api/notifications/read-all') {
         if (!user) return J(401, { error:'Login required' });
-        await query('UPDATE notifications SET is_read=TRUE WHERE user_id=$1', [user.id]);
+        await query('UPDATE notifications SET is_read=TRUE WHERE user_id IN ($1, 1)', [user.id]);
         return J(200, { success:true });
     }
 
