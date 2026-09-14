@@ -18,18 +18,50 @@ const webpush = require('web-push');
 // ============================================================
 // WEB PUSH VAPID SETUP
 // ============================================================
-const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BAonU5h2RMD7db5Zl3gGS_01GfXP0_tevIWydLGXvX4JTJOWpkku-ag-be63rkPoGCs9CSka6y--ktyq-kJvYxw';
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-const VAPID_EMAIL   = process.env.VAPID_EMAIL       || 'mailto:musitafahkenny288227@gmail.com';
+function toBase64Url(buffer) {
+    return Buffer.from(buffer).toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, '');
+}
+
+function generateVapidPair() {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+        publicKeyEncoding: { type: 'spki', format: 'der' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'der' }
+    });
+
+    return {
+        publicKey: toBase64Url(publicKey.slice(-65)),
+        privateKey: toBase64Url(privateKey.slice(-32))
+    };
+}
+
+const DEFAULT_VAPID_PUBLIC = 'BAonU5h2RMD7db5Zl3gGS_01GfXP0_tevIWydLGXvX4JTJOWpkku-ag-be63rkPoGCs9CSka6y--ktyq-kJvYxw';
+let VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC;
+let VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:musitafahkenny288227@gmail.com';
+
+if (!VAPID_PRIVATE) {
+    try {
+        const generated = generateVapidPair();
+        VAPID_PUBLIC = generated.publicKey;
+        VAPID_PRIVATE = generated.privateKey;
+        console.log('[Push] Generated runtime VAPID key pair for browser subscriptions.');
+    } catch (e) {
+        console.warn('[Push] Could not generate runtime VAPID keys:', e.message);
+    }
+}
 
 try {
     if (VAPID_PRIVATE) {
         webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
         console.log('[Push] VAPID keys configured');
     } else {
-        console.warn('[Push] VAPID_PRIVATE_KEY not set — push notifications disabled.');
+        console.warn('[Push] VAPID private key unavailable — push notifications disabled.');
     }
-} catch(e) {
+} catch (e) {
     console.warn('[Push] VAPID setup failed:', e.message);
 }
 
@@ -2475,6 +2507,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     }
 
     // ── PUSH ───────────────────────────────────────────────
+    if (method === 'GET' && pathname === '/api/push/public-key') {
+        return J(200, { publicKey: VAPID_PUBLIC || DEFAULT_VAPID_PUBLIC });
+    }
     if (method === 'POST' && pathname === '/api/push/subscribe') {
         if (!VAPID_PRIVATE) return J(503, { error: 'Push notifications are not configured on the server' });
         const body = await parseJSON(req);
