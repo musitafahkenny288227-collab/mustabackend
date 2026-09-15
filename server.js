@@ -1461,6 +1461,35 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         return JC(200, r.rows[0], 300, r.rows[0].created_at ? new Date(r.rows[0].created_at) : null);
     }
 
+    // ── RELATED SONGS ──────────────────────────────────────
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && !isNaN(seg[1]) && seg[2]==='related' && !seg[3]) {
+        const songId = parseInt(seg[1]);
+        const r = await query('SELECT genre, artist FROM songs WHERE id=$1 AND approved=TRUE', [songId]);
+        if (!r.rows[0]) return J(404, { error:'Song not found' });
+        
+        const { genre, artist } = r.rows[0];
+        const limit = parseInt(q.get('limit') || '8');
+        
+        // Get related songs: same artist first, then same genre, exclude current song
+        const related = await query(`
+            SELECT DISTINCT s.*
+            FROM songs s
+            WHERE s.id != $1 
+              AND s.approved = TRUE
+              AND (
+                LOWER(s.artist) = LOWER($2)
+                OR LOWER(s.genre) = LOWER($3)
+              )
+            ORDER BY 
+              CASE WHEN LOWER(s.artist) = LOWER($2) THEN 0 ELSE 1 END,
+              s.play_count DESC,
+              s.created_at DESC
+            LIMIT $4
+        `, [songId, artist, genre || 'Other', Math.min(limit, 20)]);
+        
+        return JC(200, { songs: related.rows }, 300, null);
+    }
+
     // ── TRACK PLAY (✅ FIX #29: dedupe per IP within 30s) ──
     if (method === 'POST' && seg[0]==='songs' && seg[1] && seg[2]==='play' && !seg[3]) {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
