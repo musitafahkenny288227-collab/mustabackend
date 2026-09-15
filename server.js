@@ -71,6 +71,7 @@ try {
 const EMAIL_USER = process.env.EMAIL_USER || 'musitafahkenny288227@gmail.com';
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.com';
+const PUBLIC_API_URL = process.env.RENDER_EXTERNAL_URL || 'https://mustabackend-nenb.onrender.com';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
@@ -1079,10 +1080,13 @@ const server = http.createServer(async (req, res) => {
                 const lastmod    = s.created_at ? new Date(s.created_at).toISOString().split('T')[0] : today;
                 const esc        = str => (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                 const coverUrl   = s.cover_image || s.cover_path || '';
+                                const imageUrl   = coverUrl && /^https?:\/\//i.test(coverUrl)
+                                        ? coverUrl
+                                        : coverUrl ? `${PUBLIC_API_URL}${coverUrl.startsWith('/') ? '' : '/'}${coverUrl}` : '';
                 const priority   = (s.release_year >= new Date().getFullYear() || s.lyrics) ? '0.9' : '0.8';
                 const imageTag   = coverUrl ? `
     <image:image>
-      <image:loc>${esc(coverUrl.startsWith('http') ? coverUrl : 'https://djmusta.com' + coverUrl)}</image:loc>
+            <image:loc>${esc(imageUrl)}</image:loc>
       <image:title>${esc(s.title)} by ${esc(s.artist)}</image:title>
       <image:caption>${esc(s.genre || 'Ugandan Music')} — ${esc(s.title)} by ${esc(s.artist)}</image:caption>
     </image:image>` : '';
