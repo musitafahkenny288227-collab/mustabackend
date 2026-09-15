@@ -1539,9 +1539,12 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             return J(500, { error: 'File upload failed: ' + e.message });
         }
 
+        // Get file size in bytes
+        const fileSize = files.song?.data?.length || 0;
+
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null, fileSize]
         );
         const newSong = r.rows[0];
         if (user.isAdmin) {
@@ -1604,9 +1607,12 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                     continue;
                 }
 
+                // Get file size in bytes
+                const fileSize = songFile?.data?.length || 0;
+
                 const r = await query(
-                    'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
-                    [title, artist, genre, duration, '', '', filePath, coverPath, user.id, !!user.isAdmin, null, new Date().getFullYear(), null]
+                    'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
+                    [title, artist, genre, duration, '', '', filePath, coverPath, user.id, !!user.isAdmin, null, new Date().getFullYear(), null, fileSize]
                 );
                 results.push({ index: i, success: true, song: r.rows[0] });
             } catch(error) {
@@ -2925,11 +2931,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             return J(500, { error: 'File upload failed: ' + e.message });
         }
 
+        // Get file size in bytes
+        const fileSize = songFile?.data?.length || 0;
+
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,$13) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album,file_size)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,$13,$14) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', description, filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
+             lyrics||'', description, filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null, fileSize]
         );
         const newSong = r.rows[0];
         await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
