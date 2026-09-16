@@ -2040,6 +2040,30 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         return J(200, { success:true });
     }
 
+    // ── REGENERATE SITEMAP (admin) ─────────────────────────
+    if (method === 'POST' && pathname === '/api/admin/regenerate-sitemap') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        try {
+            console.log(`[Sitemap] Manual regeneration requested by admin ${user.id}`);
+            const result = await query(
+                'SELECT id, title, artist, genre, cover_image, cover_path, created_at, release_year, lyrics, producer FROM songs WHERE approved=TRUE ORDER BY created_at DESC'
+            );
+            const { generateSitemap } = require('./update-sitemap.js');
+            const success = generateSitemap(result.rows);
+            if (success) {
+                await logAdminAction(user.id, 'regenerate_sitemap', `Manually regenerated sitemap with ${result.rows.length} songs`, 'system', null);
+                console.log(`[Sitemap] ✅ Regenerated with ${result.rows.length} songs`);
+                pingSearchEngines().catch(() => {});
+                return J(200, { success: true, songsCount: result.rows.length, message: 'Sitemap regenerated successfully' });
+            } else {
+                return J(500, { error: 'Failed to write sitemap file' });
+            }
+        } catch (e) {
+            console.error('[Sitemap] Regeneration error:', e.message);
+            return J(500, { error: e.message });
+        }
+    }
+
     // ── LIKE ───────────────────────────────────────────────
     if (method === 'POST' && seg[0]==='songs' && seg[2]==='like') {
         if (!user) return J(401, { error:'Login required' });
