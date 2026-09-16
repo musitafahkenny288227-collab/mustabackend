@@ -292,6 +292,40 @@ async function query(sql, params = []) {
     }
 }
 
+// ✅ PERFORMANCE: Simple in-memory cache for frequently accessed queries
+const queryCache = new Map();
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+function getCacheKey(sql, params) {
+    return `${sql}:${JSON.stringify(params)}`;
+}
+
+async function queryCached(sql, params = [], ttl = CACHE_TTL) {
+    const key = getCacheKey(sql, params);
+    const cached = queryCache.get(key);
+    
+    if (cached && Date.now() - cached.timestamp < ttl) {
+        return cached.result;
+    }
+    
+    const result = await query(sql, params);
+    queryCache.set(key, { result, timestamp: Date.now() });
+    
+    // Clean up old cache entries
+    if (queryCache.size > 100) {
+        const now = Date.now();
+        for (const [k, v] of queryCache.entries()) {
+            if (now - v.timestamp > ttl) queryCache.delete(k);
+        }
+    }
+    
+    return result;
+}
+
+function clearQueryCache() {
+    queryCache.clear();
+}
+
 // Public user object (moved up for clarity)
 function pub(u) {
     if (!u) return null;
@@ -521,6 +555,38 @@ async function initDB() {
         entity_id INTEGER,
         created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+
+    // ✅ PERFORMANCE FIX: Create database indexes for faster queries
+    console.log('Creating database indexes...');
+    
+    // Songs table indexes - critical for performance
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_approved ON songs(approved)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_created_at ON songs(created_at DESC)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_play_count ON songs(play_count DESC)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_like_count ON songs(like_count DESC)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_download_count ON songs(download_count DESC)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_genre ON songs(LOWER(genre))`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(LOWER(artist))`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(LOWER(title))`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_uploaded_by ON songs(uploaded_by)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_songs_approved_created ON songs(approved, created_at DESC)`);
+    
+    // Likes table indexes
+    await query(`CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_likes_song_id ON likes(song_id)`);
+    
+    // Plays table indexes
+    await query(`CREATE INDEX IF NOT EXISTS idx_plays_song_id ON plays(song_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_plays_created_at ON plays(created_at DESC)`);
+    
+    // Downloads table indexes
+    await query(`CREATE INDEX IF NOT EXISTS idx_downloads_song_id ON downloads(song_id)`);
+    
+    // Verification requests index
+    await query(`CREATE INDEX IF NOT EXISTS idx_verification_user_id ON verification_requests(user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_verification_status ON verification_requests(status)`);
+    
+    console.log('✅ Database indexes created');
 
     // Add missing columns
     await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS instagram TEXT DEFAULT ''`);
@@ -1275,22 +1341,22 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
     }
 
-    // ── GET SONGS (✅ FIX #7: parameterized relevance sort) ──
+    // ── GET SONGS (✅ PERFORMANCE OPTIMIZED) ──
     if (method === 'GET' && pathname === '/api/songs') {
         const category = q.get('category') || 'all';
         const search   = q.get('search') || '';
         const genre    = q.get('genre') || '';
         const uploader = q.get('uploader') || '';
         const sortParam = q.get('sort') || '';
-        const limit    = Math.min(parseInt(q.get('limit') || 20), 500);
+        const limit    = Math.min(parseInt(q.get('limit') || 20), 100); // Reduced max from 500 to 100
         const offset   = parseInt(q.get('offset') || 0);
 
-        let where  = 'approved=TRUE';
+        let where  = 's.approved=TRUE';
         let params = [];
         let idx    = 1;
 
         if (search) {
-            where += ` AND (LOWER(title) LIKE $${idx} OR LOWER(artist) LIKE $${idx+1} OR LOWER(title) LIKE $${idx+2} OR LOWER(artist) LIKE $${idx+3})`;
+            where += ` AND (LOWER(s.title) LIKE $${idx} OR LOWER(s.artist) LIKE $${idx+1} OR LOWER(s.title) LIKE $${idx+2} OR LOWER(s.artist) LIKE $${idx+3})`;
             params.push(
                 `%${search.toLowerCase()}%`,
                 `%${search.toLowerCase()}%`,
@@ -1302,31 +1368,31 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (genre) {
             const normalizedGenre = (genre || '').trim().toLowerCase();
             if (normalizedGenre === 'nonstops' || normalizedGenre.includes('nonstop') || normalizedGenre.includes('mix')) {
-                where += ` AND (LOWER(COALESCE(genre, '')) LIKE $${idx} OR LOWER(COALESCE(genre, '')) LIKE $${idx + 1} OR LOWER(COALESCE(genre, '')) LIKE $${idx + 2})`;
+                where += ` AND (LOWER(COALESCE(s.genre, '')) LIKE $${idx} OR LOWER(COALESCE(s.genre, '')) LIKE $${idx + 1} OR LOWER(COALESCE(s.genre, '')) LIKE $${idx + 2})`;
                 params.push('%nonstop%', '%mix%', '%mixtape%');
                 idx += 3;
             } else {
-                where += ` AND LOWER(genre) = $${idx}`;
+                where += ` AND LOWER(s.genre) = $${idx}`;
                 params.push(normalizedGenre);
                 idx++;
             }
         }
         if (uploader) {
-            where += ` AND uploaded_by = $${idx}`;
+            where += ` AND s.uploaded_by = $${idx}`;
             params.push(parseInt(uploader));
             idx++;
         }
         const releaseYearFilter = q.get('release_year') || '';
         if (releaseYearFilter && !isNaN(parseInt(releaseYearFilter))) {
-            where += ` AND release_year >= $${idx}`;
+            where += ` AND s.release_year >= $${idx}`;
             params.push(parseInt(releaseYearFilter));
             idx++;
         }
 
         const orderMap = {
-            new: 'created_at DESC', newest: 'created_at DESC',
-            trending: 'play_count DESC', top: 'like_count DESC',
-            plays: 'play_count DESC', downloads: 'download_count DESC', likes: 'like_count DESC'
+            new: 's.created_at DESC', newest: 's.created_at DESC',
+            trending: 's.play_count DESC', top: 's.like_count DESC',
+            plays: 's.play_count DESC', downloads: 's.download_count DESC', likes: 's.like_count DESC'
         };
 
         let order;
@@ -1344,32 +1410,58 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 WHEN LOWER(s.title) LIKE '%' || $${p-3} || '%' THEN 5
                 ELSE 6 END, s.play_count DESC`;
         } else {
-            order = orderMap[sortParam] || orderMap[category] || 'created_at DESC';
+            order = orderMap[sortParam] || orderMap[category] || 's.created_at DESC';
         }
 
-        const total = await query(`SELECT COUNT(*) FROM songs WHERE ${where}`, params);
+        // ✅ PERFORMANCE: Run count query only when needed (first page or specific requests)
+        let total = 0;
+        if (offset === 0 || q.get('include_count') === 'true') {
+            // Use cached query for anonymous users (reduces DB load)
+            const countQuery = user ? query : queryCached;
+            const countResult = await countQuery(`SELECT COUNT(*) FROM songs s WHERE ${where}`, params);
+            total = parseInt(countResult.rows[0].count);
+        }
 
         dataParams.push(limit, offset);
-        const songs = await query(
-            `SELECT s.*, COALESCE(vr.status,'none') as uploader_verified
+        
+        // ✅ PERFORMANCE: Only select needed columns, exclude large text fields
+        // Exclude lyrics and description from list view to reduce payload size
+        // Use cached query for anonymous users on common requests
+        const useCache = !user && !search && offset === 0 && limit <= 20;
+        const dataQuery = useCache ? queryCached : query;
+        
+        const songs = await dataQuery(
+            `SELECT s.id, s.title, s.artist, s.genre, s.duration, s.file_path, 
+                    s.cover_path, s.cover_image, s.uploaded_by, s.play_count, 
+                    s.download_count, s.like_count, s.created_at, s.release_year,
+                    s.is_featured, s.is_song_of_day, s.album, s.producer,
+                    COALESCE(vr.status,'none') as uploader_verified
              FROM songs s
              LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved'
              WHERE ${where}
              ORDER BY ${order}
              LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
-            dataParams
+            dataParams,
+            useCache ? 60000 : undefined // 1 minute cache for common requests
         );
 
-        const likedIds = user
-            ? (await query('SELECT song_id FROM likes WHERE user_id=$1', [user.id])).rows.map(r => r.song_id)
-            : [];
+        // ✅ PERFORMANCE: Optimize likes query with IN clause instead of N+1
+        let likedIds = [];
+        if (user && songs.rows.length > 0) {
+            const songIds = songs.rows.map(s => s.id);
+            const likesResult = await query(
+                'SELECT song_id FROM likes WHERE user_id=$1 AND song_id = ANY($2)',
+                [user.id, songIds]
+            );
+            likedIds = likesResult.rows.map(r => r.song_id);
+        }
 
-        const songListCache = user ? 0 : 60;
+        const songListCache = user ? 0 : 120; // Increased cache from 60 to 120 seconds
         const newestSong = songs.rows[0];
         const lastMod = newestSong?.created_at ? new Date(newestSong.created_at) : new Date();
         return JC(200, {
             songs: songs.rows.map(s => ({ ...s, liked: likedIds.includes(s.id) })),
-            total: parseInt(total.rows[0].count),
+            total,
             offset, limit
         }, songListCache, lastMod);
     }
@@ -1474,6 +1566,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
         );
+        
+        // Clear cache when new song added
+        clearQueryCache();
         const newSong = r.rows[0];
         if (user.isAdmin) {
             pingSearchEngines().catch(() => {});
@@ -1577,6 +1672,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const songInfo = await query('SELECT title FROM songs WHERE id=$1', [seg[1]]);
         await query('UPDATE songs SET approved=TRUE WHERE id=$1', [seg[1]]);
+        
+        // Clear cache when song approved
+        clearQueryCache();
+        
         if (songInfo.rows[0]) {
             await logAdminAction(user.id, 'approve_song', `Approved song "${songInfo.rows[0].title}"`, 'song', seg[1]);
         }
