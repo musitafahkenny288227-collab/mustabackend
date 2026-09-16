@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   country VARCHAR(100) DEFAULT 'Uganda',
   is_verified BOOLEAN DEFAULT FALSE,
   is_artist BOOLEAN DEFAULT FALSE,
+  reset_token VARCHAR(255),
+  reset_token_expiry TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   last_login TIMESTAMP
