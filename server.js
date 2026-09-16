@@ -14,6 +14,8 @@ const zlib   = require('zlib');
 const { URL } = require('url');
 const { Pool } = require('pg');
 const webpush = require('web-push');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 // ============================================================
 // WEB PUSH VAPID SETUP
@@ -1155,10 +1157,123 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     // ── AUTH ───────────────────────────────────────────────
     if (method === 'POST' && pathname === '/api/auth/register') {
-        return J(403, { error:'Registration is only allowed via Google.' });
+        if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
+        
+        const { email, username, password, fullName } = await parseJSON(req);
+        
+        // Validation
+        if (!email || !username || !password) {
+            return J(400, { error:'Email, username, and password are required' });
+        }
+        if (password.length < 6) {
+            return J(400, { error:'Password must be at least 6 characters' });
+        }
+        if (username.length < 3 || username.length > 50) {
+            return J(400, { error:'Username must be 3-50 characters' });
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+            return J(400, { error:'Username can only contain letters, numbers, and underscores' });
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return J(400, { error:'Invalid email format' });
+        }
+        
+        // Check if email or username already exists
+        const existing = await query(
+            'SELECT id FROM users WHERE email=$1 OR username=$2',
+            [email.toLowerCase(), username.toLowerCase()]
+        );
+        if (existing.rows.length > 0) {
+            return J(409, { error:'Email or username already exists' });
+        }
+        
+        // Hash password
+        const passwordHash = await bcrypt.hash(password, 10);
+        
+        // Create user
+        const result = await query(
+            `INSERT INTO users (email, username, password_hash, full_name, created_at) 
+             VALUES ($1, $2, $3, $4, NOW()) 
+             RETURNING id, email, username, full_name, created_at`,
+            [email.toLowerCase(), username.toLowerCase(), passwordHash, fullName || username]
+        );
+        
+        const newUser = result.rows[0];
+        const token = signJWT({ 
+            id: newUser.id, 
+            username: newUser.username, 
+            email: newUser.email, 
+            isAdmin: false, 
+            tv: 0 
+        });
+        
+        console.log(`[Auth] New user registered: ${newUser.username} (${newUser.email})`);
+        
+        return J(201, { 
+            token, 
+            user: {
+                id: newUser.id,
+                username: newUser.username,
+                email: newUser.email,
+                fullName: newUser.full_name,
+                isAdmin: false
+            }
+        });
     }
     if (method === 'POST' && pathname === '/api/auth/login') {
-        return J(403, { error:'Login is only allowed via Google.' });
+        if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
+        
+        const { identifier, password } = await parseJSON(req);
+        
+        if (!identifier || !password) {
+            return J(400, { error:'Email/username and password are required' });
+        }
+        
+        // Find user by email or username
+        const result = await query(
+            'SELECT * FROM users WHERE email=$1 OR username=$1',
+            [identifier.toLowerCase()]
+        );
+        
+        if (result.rows.length === 0) {
+            return J(401, { error:'Invalid credentials' });
+        }
+        
+        const user = result.rows[0];
+        
+        // Check password
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+        if (!validPassword) {
+            return J(401, { error:'Invalid credentials' });
+        }
+        
+        // Update last login
+        await query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
+        
+        // Generate token
+        const token = signJWT({ 
+            id: user.id, 
+            username: user.username, 
+            email: user.email, 
+            isAdmin: !!user.is_admin, 
+            tv: user.token_version || 0 
+        });
+        
+        console.log(`[Auth] User logged in: ${user.username}`);
+        
+        return J(200, { 
+            token, 
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                fullName: user.full_name,
+                profilePicture: user.profile_picture,
+                isAdmin: !!user.is_admin,
+                isVerified: !!user.is_verified,
+                isArtist: !!user.is_artist
+            }
+        });
     }
 
     if (method === 'GET' && pathname === '/api/auth/me') {
@@ -2232,9 +2347,47 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── PROFILE ────────────────────────────────────────────
     if (method === 'PATCH' && pathname === '/api/auth/profile') {
         if (!user) return J(401, { error:'Login required' });
-        const { username } = await parseJSON(req);
-        if (!username || username.trim().length < 3) return J(400, { error:'Username must be at least 3 characters' });
-        await query('UPDATE users SET username=$1 WHERE id=$2', [username.trim(), user.id]);
+        const { username, fullName, bio } = await parseJSON(req);
+        
+        // Validate
+        if (username && username.trim().length < 3) {
+            return J(400, { error:'Username must be at least 3 characters' });
+        }
+        if (username && !/^[a-zA-Z0-9_]+$/.test(username.trim())) {
+            return J(400, { error:'Username can only contain letters, numbers, and underscores' });
+        }
+        
+        // Check if username is taken
+        if (username && username.trim().toLowerCase() !== user.username.toLowerCase()) {
+            const existing = await query('SELECT id FROM users WHERE LOWER(username)=$1 AND id!=$2', [username.trim().toLowerCase(), user.id]);
+            if (existing.rows.length > 0) {
+                return J(409, { error:'Username already taken' });
+            }
+        }
+        
+        // Build update query
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+        
+        if (username) {
+            updates.push(`username=$${paramCount++}`);
+            values.push(username.trim());
+        }
+        if (fullName !== undefined) {
+            updates.push(`full_name=$${paramCount++}`);
+            values.push(fullName.trim());
+        }
+        if (bio !== undefined) {
+            updates.push(`bio=$${paramCount++}`);
+            values.push(bio.trim());
+        }
+        
+        if (updates.length > 0) {
+            values.push(user.id);
+            await query(`UPDATE users SET ${updates.join(', ')} WHERE id=$${paramCount}`, values);
+        }
+        
         return J(200, { success:true });
     }
     if (method === 'POST' && pathname === '/api/auth/profile/photo') {
