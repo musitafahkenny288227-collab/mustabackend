@@ -1276,6 +1276,101 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         });
     }
 
+    if (method === 'POST' && pathname === '/api/auth/forgot-password') {
+        if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
+        
+        const { email } = await parseJSON(req);
+        
+        if (!email) {
+            return J(400, { error:'Email is required' });
+        }
+        
+        // Check if user exists
+        const result = await query('SELECT id, email, username FROM users WHERE email=$1', [email.toLowerCase()]);
+        
+        // Always return success even if email doesn't exist (security best practice)
+        if (result.rows.length === 0) {
+            console.log(`[Auth] Password reset requested for non-existent email: ${email}`);
+            return J(200, { message:'If that email exists, a reset link has been sent' });
+        }
+        
+        const user = result.rows[0];
+        
+        // Generate reset token (valid for 1 hour)
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+        
+        // Store reset token in database
+        await query(
+            'UPDATE users SET reset_token=$1, reset_token_expiry=$2 WHERE id=$3',
+            [resetToken, resetExpiry, user.id]
+        );
+        
+        // Send email with reset link
+        const resetUrl = `${FRONTEND_URL}/?reset=${resetToken}`;
+        const emailHtml = `
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+                <h2 style="color:#ff6b00">Reset Your Password</h2>
+                <p>Hi ${user.username},</p>
+                <p>You requested to reset your password for DJ Musta Music. Click the button below to reset it:</p>
+                <p style="text-align:center;margin:30px 0">
+                    <a href="${resetUrl}" style="display:inline-block;padding:14px 28px;background:#ff6b00;color:white;text-decoration:none;border-radius:8px;font-weight:bold">Reset Password</a>
+                </p>
+                <p>Or copy and paste this link into your browser:</p>
+                <p style="color:#666;word-break:break-all">${resetUrl}</p>
+                <p style="color:#666;font-size:14px">This link will expire in 1 hour.</p>
+                <p style="color:#666;font-size:14px">If you didn't request this, you can safely ignore this email.</p>
+                <hr style="border:none;border-top:1px solid #ddd;margin:30px 0">
+                <p style="color:#999;font-size:12px">DJ Musta Music - Uganda's #1 Music Platform</p>
+            </div>
+        `;
+        
+        await sendEmail(user.email, 'Reset Your Password - DJ Musta Music', emailHtml);
+        
+        console.log(`[Auth] Password reset email sent to: ${user.email}`);
+        
+        return J(200, { message:'If that email exists, a reset link has been sent' });
+    }
+
+    if (method === 'POST' && pathname === '/api/auth/reset-password') {
+        if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
+        
+        const { token: resetToken, newPassword } = await parseJSON(req);
+        
+        if (!resetToken || !newPassword) {
+            return J(400, { error:'Token and new password are required' });
+        }
+        
+        if (newPassword.length < 6) {
+            return J(400, { error:'Password must be at least 6 characters' });
+        }
+        
+        // Find user with valid reset token
+        const result = await query(
+            'SELECT id, email, username FROM users WHERE reset_token=$1 AND reset_token_expiry > NOW()',
+            [resetToken]
+        );
+        
+        if (result.rows.length === 0) {
+            return J(400, { error:'Invalid or expired reset token' });
+        }
+        
+        const user = result.rows[0];
+        
+        // Hash new password
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        
+        // Update password and clear reset token
+        await query(
+            'UPDATE users SET password_hash=$1, reset_token=NULL, reset_token_expiry=NULL WHERE id=$2',
+            [passwordHash, user.id]
+        );
+        
+        console.log(`[Auth] Password reset successful for: ${user.username}`);
+        
+        return J(200, { message:'Password reset successful! You can now login with your new password.' });
+    }
+
     if (method === 'GET' && pathname === '/api/auth/me') {
         if (!user) return J(401, { error:'Unauthorized' });
         const r = await query('SELECT * FROM users WHERE id=$1', [user.id]);
