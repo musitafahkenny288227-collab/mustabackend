@@ -14,7 +14,34 @@ const zlib   = require('zlib');
 const { URL } = require('url');
 const { Pool } = require('pg');
 const webpush = require('web-push');
-const bcrypt = require('bcrypt');
+
+// Try to load bcrypt, fallback to crypto if not available
+let bcrypt;
+let useCrypto = false;
+try {
+    bcrypt = require('bcrypt');
+    console.log('[Auth] Using bcrypt for password hashing');
+} catch (e) {
+    console.warn('[Auth] Bcrypt not available, using crypto fallback');
+    useCrypto = true;
+    // Fallback implementation using crypto
+    bcrypt = {
+        hash: async (password, rounds) => {
+            const salt = crypto.randomBytes(16).toString('hex');
+            const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+            return `crypto:${salt}:${hash}`;
+        },
+        compare: async (password, hash) => {
+            if (!hash || !hash.startsWith('crypto:')) return false;
+            const parts = hash.split(':');
+            const salt = parts[1];
+            const originalHash = parts[2];
+            const testHash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+            return testHash === originalHash;
+        }
+    };
+}
+
 const jwt = require('jsonwebtoken');
 
 // ============================================================
@@ -1159,121 +1186,152 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     if (method === 'POST' && pathname === '/api/auth/register') {
         if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
         
-        const { email, username, password, fullName } = await parseJSON(req);
-        
-        // Validation
-        if (!email || !username || !password) {
-            return J(400, { error:'Email, username, and password are required' });
-        }
-        if (password.length < 6) {
-            return J(400, { error:'Password must be at least 6 characters' });
-        }
-        if (username.length < 3 || username.length > 50) {
-            return J(400, { error:'Username must be 3-50 characters' });
-        }
-        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-            return J(400, { error:'Username can only contain letters, numbers, and underscores' });
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            return J(400, { error:'Invalid email format' });
-        }
-        
-        // Check if email or username already exists
-        const existing = await query(
-            'SELECT id FROM users WHERE email=$1 OR username=$2',
-            [email.toLowerCase(), username.toLowerCase()]
-        );
-        if (existing.rows.length > 0) {
-            return J(409, { error:'Email or username already exists' });
-        }
-        
-        // Hash password
-        const passwordHash = await bcrypt.hash(password, 10);
-        
-        // Create user
-        const result = await query(
-            `INSERT INTO users (email, username, password_hash, full_name, created_at) 
-             VALUES ($1, $2, $3, $4, NOW()) 
-             RETURNING id, email, username, full_name, created_at`,
-            [email.toLowerCase(), username.toLowerCase(), passwordHash, fullName || username]
-        );
-        
-        const newUser = result.rows[0];
-        const token = signJWT({ 
-            id: newUser.id, 
-            username: newUser.username, 
-            email: newUser.email, 
-            isAdmin: false, 
-            tv: 0 
-        });
-        
-        console.log(`[Auth] New user registered: ${newUser.username} (${newUser.email})`);
-        
-        return J(201, { 
-            token, 
-            user: {
-                id: newUser.id,
-                username: newUser.username,
-                email: newUser.email,
-                fullName: newUser.full_name,
-                isAdmin: false
+        try {
+            const { email, username, password, fullName } = await parseJSON(req);
+            
+            // Validation
+            if (!email || !username || !password) {
+                return J(400, { error:'Email, username, and password are required' });
             }
-        });
+            if (password.length < 6) {
+                return J(400, { error:'Password must be at least 6 characters' });
+            }
+            if (username.length < 3 || username.length > 50) {
+                return J(400, { error:'Username must be 3-50 characters' });
+            }
+            if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+                return J(400, { error:'Username can only contain letters, numbers, and underscores' });
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return J(400, { error:'Invalid email format' });
+            }
+            
+            // Check if email or username already exists
+            const existing = await query(
+                'SELECT id FROM users WHERE email=$1 OR username=$2',
+                [email.toLowerCase(), username.toLowerCase()]
+            );
+            if (existing.rows.length > 0) {
+                return J(409, { error:'Email or username already exists' });
+            }
+            
+            // Hash password - wrapped in try/catch in case bcrypt fails
+            let passwordHash;
+            try {
+                passwordHash = await bcrypt.hash(password, 10);
+                console.log(`[Auth] Password hashed using ${useCrypto ? 'crypto fallback' : 'bcrypt'}`);
+            } catch (bcryptError) {
+                console.error('[Auth] Bcrypt hash error:', bcryptError.message);
+                return J(500, { error:'Registration system error. Please contact support.' });
+            }
+            
+            // Create user
+            const result = await query(
+                `INSERT INTO users (email, username, password_hash, full_name, created_at) 
+                 VALUES ($1, $2, $3, $4, NOW()) 
+                 RETURNING id, email, username, full_name, created_at`,
+                [email.toLowerCase(), username.toLowerCase(), passwordHash, fullName || username]
+            );
+            
+            const newUser = result.rows[0];
+            const token = signJWT({ 
+                id: newUser.id, 
+                username: newUser.username, 
+                email: newUser.email, 
+                isAdmin: false, 
+                tv: 0 
+            });
+            
+            console.log(`[Auth] New user registered: ${newUser.username} (${newUser.email})`);
+            
+            return J(201, { 
+                token, 
+                user: {
+                    id: newUser.id,
+                    username: newUser.username,
+                    email: newUser.email,
+                    fullName: newUser.full_name,
+                    isAdmin: false
+                }
+            });
+        } catch (error) {
+            console.error('[Auth] Registration error:', error);
+            return J(500, { error:'Registration failed. Please try again.' });
+        }
     }
     if (method === 'POST' && pathname === '/api/auth/login') {
         if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
         
-        const { identifier, password } = await parseJSON(req);
-        
-        if (!identifier || !password) {
-            return J(400, { error:'Email/username and password are required' });
-        }
-        
-        // Find user by email or username
-        const result = await query(
-            'SELECT * FROM users WHERE email=$1 OR username=$1',
-            [identifier.toLowerCase()]
-        );
-        
-        if (result.rows.length === 0) {
-            return J(401, { error:'Invalid credentials' });
-        }
-        
-        const user = result.rows[0];
-        
-        // Check password
-        const validPassword = await bcrypt.compare(password, user.password_hash);
-        if (!validPassword) {
-            return J(401, { error:'Invalid credentials' });
-        }
-        
-        // Update last login
-        await query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
-        
-        // Generate token
-        const token = signJWT({ 
-            id: user.id, 
-            username: user.username, 
-            email: user.email, 
-            isAdmin: !!user.is_admin, 
-            tv: user.token_version || 0 
-        });
-        
-        console.log(`[Auth] User logged in: ${user.username}`);
-        
-        return J(200, { 
-            token, 
-            user: {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                fullName: user.full_name,
-                profilePicture: user.profile_picture,
-                isAdmin: !!user.is_admin,
-                isVerified: !!user.is_verified,
-                isArtist: !!user.is_artist
+        try {
+            const { identifier, password } = await parseJSON(req);
+            
+            if (!identifier || !password) {
+                return J(400, { error:'Email/username and password are required' });
             }
-        });
+            
+            // Find user by email or username
+            const result = await query(
+                'SELECT * FROM users WHERE email=$1 OR username=$1',
+                [identifier.toLowerCase()]
+            );
+            
+            if (result.rows.length === 0) {
+                return J(401, { error:'Invalid credentials' });
+            }
+            
+            const user = result.rows[0];
+            
+            // Check if user has password (some users might only have Google OAuth)
+            if (!user.password_hash || user.password_hash === '' || user.password_hash === null) {
+                console.log(`[Auth] User ${user.username} has no password - likely Google OAuth user`);
+                return J(401, { error:'This account was created with Google Sign-In. Please use the "Continue with Google" button instead.' });
+            }
+            
+            // Check password - wrapped in try/catch in case bcrypt fails
+            let validPassword = false;
+            try {
+                validPassword = await bcrypt.compare(password, user.password_hash);
+            } catch (bcryptError) {
+                console.error('[Auth] Bcrypt error:', bcryptError.message);
+                console.error('[Auth] User:', user.username, 'Password hash length:', user.password_hash?.length);
+                return J(500, { error:'Authentication error. This account may need to be recreated. Please contact support or try registering with a new username.' });
+            }
+            
+            if (!validPassword) {
+                return J(401, { error:'Invalid credentials' });
+            }
+            
+            // Update last login
+            await query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
+            
+            // Generate token
+            const token = signJWT({ 
+                id: user.id, 
+                username: user.username, 
+                email: user.email, 
+                isAdmin: !!user.is_admin, 
+                tv: user.token_version || 0 
+            });
+            
+            console.log(`[Auth] User logged in: ${user.username}`);
+            
+            return J(200, { 
+                token, 
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    fullName: user.full_name,
+                    profilePicture: user.profile_picture,
+                    isAdmin: !!user.is_admin,
+                    isVerified: !!user.is_verified,
+                    isArtist: !!user.is_artist
+                }
+            });
+        } catch (error) {
+            console.error('[Auth] Login error:', error);
+            return J(500, { error:'Login failed. Please try again or create a new account.' });
+        }
     }
 
     if (method === 'POST' && pathname === '/api/auth/forgot-password') {
