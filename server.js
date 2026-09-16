@@ -18,50 +18,18 @@ const webpush = require('web-push');
 // ============================================================
 // WEB PUSH VAPID SETUP
 // ============================================================
-function toBase64Url(buffer) {
-    return Buffer.from(buffer).toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/g, '');
-}
-
-function generateVapidPair() {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
-        namedCurve: 'prime256v1',
-        publicKeyEncoding: { type: 'spki', format: 'der' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'der' }
-    });
-
-    return {
-        publicKey: toBase64Url(publicKey.slice(-65)),
-        privateKey: toBase64Url(privateKey.slice(-32))
-    };
-}
-
-const DEFAULT_VAPID_PUBLIC = 'BAonU5h2RMD7db5Zl3gGS_01GfXP0_tevIWydLGXvX4JTJOWpkku-ag-be63rkPoGCs9CSka6y--ktyq-kJvYxw';
-let VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC;
-let VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:musitafahkenny288227@gmail.com';
-
-if (!VAPID_PRIVATE) {
-    try {
-        const generated = generateVapidPair();
-        VAPID_PUBLIC = generated.publicKey;
-        VAPID_PRIVATE = generated.privateKey;
-        console.log('[Push] Generated runtime VAPID key pair for browser subscriptions.');
-    } catch (e) {
-        console.warn('[Push] Could not generate runtime VAPID keys:', e.message);
-    }
-}
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BAonU5h2RMD7db5Zl3gGS_01GfXP0_tevIWydLGXvX4JTJOWpkku-ag-be63rkPoGCs9CSka6y--ktyq-kJvYxw';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+const VAPID_EMAIL   = process.env.VAPID_EMAIL       || 'mailto:musitafahkenny288227@gmail.com';
 
 try {
     if (VAPID_PRIVATE) {
         webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
         console.log('[Push] VAPID keys configured');
     } else {
-        console.warn('[Push] VAPID private key unavailable — push notifications disabled.');
+        console.warn('[Push] VAPID_PRIVATE_KEY not set — push notifications disabled.');
     }
-} catch (e) {
+} catch(e) {
     console.warn('[Push] VAPID setup failed:', e.message);
 }
 
@@ -71,7 +39,6 @@ try {
 const EMAIL_USER = process.env.EMAIL_USER || 'musitafahkenny288227@gmail.com';
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.com';
-const PUBLIC_API_URL = process.env.RENDER_EXTERNAL_URL || 'https://mustabackend-nenb.onrender.com';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
@@ -1039,10 +1006,6 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/sitemap.xml') {
         try {
             const songs = await query('SELECT id, title, artist, genre, cover_image, cover_path, created_at, release_year, lyrics, producer FROM songs WHERE approved=TRUE ORDER BY created_at DESC');
-            const validSongs = (songs.rows || []).filter(s => s && String(s.title || '').trim() && String(s.artist || '').trim());
-            if ((songs.rows || []).length !== validSongs.length) {
-                console.warn(`[Sitemap] Approved songs: ${(songs.rows || []).length}. Valid songs for sitemap: ${validSongs.length}.`);
-            }
             const toSlug = str => str.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
 
             const staticPages = [
@@ -1069,7 +1032,7 @@ const server = http.createServer(async (req, res) => {
   </url>`).join('\n');
 
             const seenSongUrls = new Set();
-            const songUrls = validSongs.map(s => {
+            const songUrls = songs.rows.map(s => {
                 const titleSlug  = toSlug(s.title) || `song-${s.id}`;
                 const artistSlug = toSlug(s.artist) || 'unknown';
                 let songUrl = `https://djmusta.com/song/${titleSlug}/${artistSlug}`;
@@ -1080,13 +1043,10 @@ const server = http.createServer(async (req, res) => {
                 const lastmod    = s.created_at ? new Date(s.created_at).toISOString().split('T')[0] : today;
                 const esc        = str => (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                 const coverUrl   = s.cover_image || s.cover_path || '';
-                                const imageUrl   = coverUrl && /^https?:\/\//i.test(coverUrl)
-                                        ? coverUrl
-                                        : coverUrl ? `${PUBLIC_API_URL}${coverUrl.startsWith('/') ? '' : '/'}${coverUrl}` : '';
                 const priority   = (s.release_year >= new Date().getFullYear() || s.lyrics) ? '0.9' : '0.8';
                 const imageTag   = coverUrl ? `
     <image:image>
-            <image:loc>${esc(imageUrl)}</image:loc>
+      <image:loc>${esc(coverUrl.startsWith('http') ? coverUrl : 'https://djmusta.com' + coverUrl)}</image:loc>
       <image:title>${esc(s.title)} by ${esc(s.artist)}</image:title>
       <image:caption>${esc(s.genre || 'Ugandan Music')} — ${esc(s.title)} by ${esc(s.artist)}</image:caption>
     </image:image>` : '';
@@ -1461,35 +1421,6 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         return JC(200, r.rows[0], 300, r.rows[0].created_at ? new Date(r.rows[0].created_at) : null);
     }
 
-    // ── RELATED SONGS ──────────────────────────────────────
-    if (method === 'GET' && seg[0]==='songs' && seg[1] && !isNaN(seg[1]) && seg[2]==='related' && !seg[3]) {
-        const songId = parseInt(seg[1]);
-        const r = await query('SELECT genre, artist FROM songs WHERE id=$1 AND approved=TRUE', [songId]);
-        if (!r.rows[0]) return J(404, { error:'Song not found' });
-        
-        const { genre, artist } = r.rows[0];
-        const limit = parseInt(q.get('limit') || '8');
-        
-        // Get related songs: same artist first, then same genre, exclude current song
-        const related = await query(`
-            SELECT DISTINCT s.*
-            FROM songs s
-            WHERE s.id != $1 
-              AND s.approved = TRUE
-              AND (
-                LOWER(s.artist) = LOWER($2)
-                OR LOWER(s.genre) = LOWER($3)
-              )
-            ORDER BY 
-              CASE WHEN LOWER(s.artist) = LOWER($2) THEN 0 ELSE 1 END,
-              s.play_count DESC,
-              s.created_at DESC
-            LIMIT $4
-        `, [songId, artist, genre || 'Other', Math.min(limit, 20)]);
-        
-        return JC(200, { songs: related.rows }, 300, null);
-    }
-
     // ── TRACK PLAY (✅ FIX #29: dedupe per IP within 30s) ──
     if (method === 'POST' && seg[0]==='songs' && seg[1] && seg[2]==='play' && !seg[3]) {
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
@@ -1539,12 +1470,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             return J(500, { error: 'File upload failed: ' + e.message });
         }
 
-        // Get file size in bytes
-        const fileSize = files.song?.data?.length || 0;
-
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null, fileSize]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
         );
         const newSong = r.rows[0];
         if (user.isAdmin) {
@@ -1607,12 +1535,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                     continue;
                 }
 
-                // Get file size in bytes
-                const fileSize = songFile?.data?.length || 0;
-
                 const r = await query(
-                    'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
-                    [title, artist, genre, duration, '', '', filePath, coverPath, user.id, !!user.isAdmin, null, new Date().getFullYear(), null, fileSize]
+                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+                    [title, artist, genre, duration, '', filePath, coverPath, user.id, !!user.isAdmin]
                 );
                 results.push({ index: i, success: true, song: r.rows[0] });
             } catch(error) {
@@ -2190,32 +2115,18 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     // ── NOTIFICATIONS ──────────────────────────────────────
     if (method === 'GET' && pathname === '/api/notifications') {
-        if (user) {
-            const r = await query(`
-                SELECT * FROM notifications
-                WHERE user_id IN ($1, 1)
-                ORDER BY created_at DESC
-                LIMIT 50
-            `, [user.id]);
-            return J(200, { notifications: r.rows, public: false });
-        }
-
-        const r = await query(`
-            SELECT * FROM notifications
-            WHERE user_id = 1
-            ORDER BY created_at DESC
-            LIMIT 50
-        `);
-        return J(200, { notifications: r.rows, public: true });
+        if (!user) return J(401, { error:'Login required' });
+        const r = await query('SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50', [user.id]);
+        return J(200, { notifications: r.rows });
     }
     if (method === 'PATCH' && seg[0]==='notifications' && seg[1] && seg[2]==='read') {
         if (!user) return J(401, { error:'Login required' });
-        await query('UPDATE notifications SET is_read=TRUE WHERE id=$1 AND user_id IN ($2, 1)', [seg[1], user.id]);
+        await query('UPDATE notifications SET is_read=TRUE WHERE id=$1 AND user_id=$2', [seg[1], user.id]);
         return J(200, { success:true });
     }
     if (method === 'PATCH' && pathname === '/api/notifications/read-all') {
         if (!user) return J(401, { error:'Login required' });
-        await query('UPDATE notifications SET is_read=TRUE WHERE user_id IN ($1, 1)', [user.id]);
+        await query('UPDATE notifications SET is_read=TRUE WHERE user_id=$1', [user.id]);
         return J(200, { success:true });
     }
 
@@ -2426,7 +2337,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── ADMIN STATS / ANALYTICS ────────────────────────────
     if (method === 'GET' && pathname === '/api/admin/stats') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const [songs, users, premium, plays, downloads, pending, comments, verifications, revenue] = await Promise.all([
+        const [songs, users, premium, plays, downloads, pending, comments, verifications] = await Promise.all([
             query('SELECT COUNT(*) FROM songs WHERE approved=TRUE'),
             query('SELECT COUNT(*) FROM users'),
             query('SELECT COUNT(*) FROM users WHERE is_premium=TRUE'),
@@ -2434,8 +2345,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             query('SELECT COALESCE(SUM(download_count),0) FROM songs WHERE approved=TRUE'),
             query('SELECT COUNT(*) FROM songs WHERE approved=FALSE'),
             query('SELECT COUNT(*) FROM comments'),
-            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'"),
-            query("SELECT COALESCE(SUM(amount),0)::numeric AS total_revenue FROM payments WHERE status='completed'")
+            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'")
         ]);
         return J(200, {
             songs: parseInt(songs.rows[0].count),
@@ -2446,7 +2356,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             pending: parseInt(pending.rows[0].count),
             comments: parseInt(comments.rows[0].count),
             verifications: parseInt(verifications.rows[0].count),
-            revenue: Number(revenue.rows[0].total_revenue || 0)
+            revenue: parseInt(premium.rows[0].count) * 10000
         });
     }
     if (method === 'GET' && pathname === '/api/admin/analytics') {
@@ -2565,9 +2475,6 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     }
 
     // ── PUSH ───────────────────────────────────────────────
-    if (method === 'GET' && pathname === '/api/push/public-key') {
-        return J(200, { publicKey: VAPID_PUBLIC || DEFAULT_VAPID_PUBLIC });
-    }
     if (method === 'POST' && pathname === '/api/push/subscribe') {
         if (!VAPID_PRIVATE) return J(503, { error: 'Push notifications are not configured on the server' });
         const body = await parseJSON(req);
@@ -2931,14 +2838,11 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             return J(500, { error: 'File upload failed: ' + e.message });
         }
 
-        // Get file size in bytes
-        const fileSize = songFile?.data?.length || 0;
-
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album,file_size)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,$13,$14) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,$13) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', description, filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null, fileSize]
+             lyrics||'', description, filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
         );
         const newSong = r.rows[0];
         await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
