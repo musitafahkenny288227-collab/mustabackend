@@ -2351,7 +2351,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     }
 
     if (method === 'GET' && seg[0]==='artists' && seg[1] && !seg[2]) {
-        const artistName = decodeURIComponent(seg[1]);
+        // Decode artist name properly - replace + with space before decodeURIComponent
+        const artistName = decodeURIComponent(seg[1].replace(/\+/g, ' '));
         const profile = await query(`
             SELECT a.*,
                    EXISTS(SELECT 1 FROM verification_requests vr WHERE LOWER(vr.artist_name)=LOWER(a.name) AND vr.status='approved') AS is_verified
@@ -2364,7 +2365,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     if (method === 'PATCH' && seg[0]==='artists' && seg[1] && !seg[2]) {
         if (!user) return J(401, { error:'Login required' });
-        const artistName = decodeURIComponent(seg[1]);
+        const artistName = decodeURIComponent(seg[1].replace(/\+/g, ' '));
         if (!user.isAdmin) {
             const ownership = await query('SELECT 1 FROM songs WHERE uploaded_by=$1 AND LOWER(artist)=LOWER($2) LIMIT 1', [user.id, artistName]);
             if (!ownership.rows.length) return J(403, { error:'You can only edit an artist profile linked to your uploads' });
@@ -2481,7 +2482,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── FOLLOWS ────────────────────────────────────────────
     if (method === 'POST' && seg[0]==='artists' && seg[1] && seg[2]==='follow') {
         if (!user) return J(401, { error:'Login required' });
-        const artistName = decodeURIComponent(seg[1]);
+        const artistName = decodeURIComponent(seg[1].replace(/\+/g, ' '));
         try {
             await query('INSERT INTO follows (follower_id,artist_name) VALUES ($1,$2)', [user.id, artistName]);
             return J(200, { following:true });
@@ -2492,13 +2493,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     }
     if (method === 'DELETE' && seg[0]==='artists' && seg[1] && seg[2]==='follow') {
         if (!user) return J(401, { error:'Login required' });
-        const artistName = decodeURIComponent(seg[1]);
+        const artistName = decodeURIComponent(seg[1].replace(/\+/g, ' '));
         await query('DELETE FROM follows WHERE follower_id=$1 AND artist_name=$2', [user.id, artistName]);
         return J(200, { following:false });
     }
     if (method === 'GET' && seg[0]==='artists' && seg[1] && seg[2]==='following') {
         if (!user) return J(200, { following:false });
-        const artistName = decodeURIComponent(seg[1]);
+        const artistName = decodeURIComponent(seg[1].replace(/\+/g, ' '));
         const r = await query('SELECT id FROM follows WHERE follower_id=$1 AND artist_name=$2', [user.id, artistName]);
         return J(200, { following: r.rows.length > 0 });
     }
