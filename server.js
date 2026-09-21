@@ -2201,9 +2201,6 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'artist';
         const cleanFilename = `${cleanTitle}_${cleanArtist}_[this_song_downloaded_from_www.Djmusta.com].mp3`;
 
-        await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
-        await query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]);
-
         // Legacy local file
         if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
             const localPath = fileUrl.startsWith('/')
@@ -2218,6 +2215,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 'Cache-Control': 'public,max-age=3600',
                 ...corsHeaders(origin)
             });
+            await query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]]);
+            await query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]);
             fs.createReadStream(localPath).pipe(res);
             return;
         }
@@ -2239,6 +2238,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 // ✅ FIX #15: don't send undefined Content-Length
                 if (proxyRes.headers['content-length']) headers['Content-Length'] = proxyRes.headers['content-length'];
                 res.writeHead(200, headers);
+                query('UPDATE songs SET download_count=download_count+1 WHERE id=$1', [seg[1]])
+                    .then(() => query('INSERT INTO downloads (user_id,song_id,ip) VALUES ($1,$2,$3)', [user?.id||null, seg[1], ip]))
+                    .catch(error => console.error('[Download tracking error]', error.message));
                 proxyRes.pipe(res);
                 proxyRes.on('end', resolve);
             }).on('error', () => {
