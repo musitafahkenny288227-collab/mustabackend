@@ -321,6 +321,26 @@ async function query(sql, params = []) {
     }
 }
 
+async function getAudioFileSize(fileUrl) {
+    if (!fileUrl) return null;
+    try {
+        if (!/^https?:\/\//i.test(fileUrl)) {
+            const localPath = fileUrl.startsWith('/')
+                ? path.join(__dirname, '..', fileUrl)
+                : path.join(__dirname, fileUrl);
+            return fs.existsSync(localPath) ? fs.statSync(localPath).size : null;
+        }
+        const response = await fetch(fileUrl, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(3000)
+        });
+        const length = Number(response.headers.get('content-length'));
+        return response.ok && Number.isFinite(length) && length > 0 ? length : null;
+    } catch (_) {
+        return null;
+    }
+}
+
 // ✅ PERFORMANCE: Simple in-memory cache for frequently accessed queries
 const queryCache = new Map();
 const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
@@ -471,6 +491,7 @@ async function initDB() {
         duration TEXT DEFAULT '3:00',
         lyrics TEXT DEFAULT '',
         file_path TEXT NOT NULL,
+        file_size BIGINT,
         cover_path TEXT,
         uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         play_count INTEGER DEFAULT 0,
@@ -622,6 +643,7 @@ async function initDB() {
     await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS twitter TEXT DEFAULT ''`);
     await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS facebook TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS release_year INTEGER DEFAULT EXTRACT(YEAR FROM NOW())::int`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS file_size BIGINT`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS producer TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''`);
@@ -1699,7 +1721,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const dataQuery = useCache ? queryCached : query;
         
         const songs = await dataQuery(
-            `SELECT s.id, s.title, s.artist, s.genre, s.duration, s.file_path, 
+            `SELECT s.id, s.title, s.artist, s.genre, s.duration, s.file_path, s.file_size,
                     s.cover_path, s.cover_image, s.uploaded_by, s.play_count, 
                     s.download_count, s.like_count, s.created_at, s.release_year,
                     s.is_featured, s.is_song_of_day, s.album, s.producer,
@@ -1712,6 +1734,16 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             dataParams,
             useCache ? 60000 : undefined // 1 minute cache for common requests
         );
+
+        if (search && songs.rows.length) {
+            await Promise.all(songs.rows.map(async song => {
+                if (song.file_size) return;
+                const fileSize = await getAudioFileSize(song.file_path);
+                if (!fileSize) return;
+                song.file_size = fileSize;
+                await query('UPDATE songs SET file_size=$1 WHERE id=$2 AND file_size IS NULL', [fileSize, song.id]).catch(() => {});
+            }));
+        }
 
         // ✅ PERFORMANCE: Optimize likes query with IN clause instead of N+1
         let likedIds = [];
@@ -1831,8 +1863,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
 
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, files.song.data.length, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
         );
         
         // Clear cache when new song added
@@ -1899,8 +1931,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 }
 
                 const r = await query(
-                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,cover_path,uploaded_by,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-                    [title, artist, genre, duration, '', filePath, coverPath, user.id, !!user.isAdmin]
+                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,file_size,cover_path,uploaded_by,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+                    [title, artist, genre, duration, '', filePath, songFile.data.length, coverPath, user.id, !!user.isAdmin]
                 );
                 results.push({ index: i, success: true, song: r.rows[0] });
             } catch(error) {
@@ -3275,10 +3307,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
 
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,$13) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11,$12,$13,$14) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', description, filePath, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
+             lyrics||'', description, filePath, songFile.data.length, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
         );
         const newSong = r.rows[0];
         await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
