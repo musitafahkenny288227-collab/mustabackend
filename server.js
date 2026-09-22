@@ -3224,10 +3224,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const placement = String(fields.placement || '').trim();
         const image = files.image;
         if (!bannerPlacements.includes(placement)) return J(400, { error: 'Invalid banner placement' });
-        if (!image?.data?.length || !image.mimetype.startsWith('image/')) return J(400, { error: 'A banner image is required' });
-        if (image.data.length > 5 * 1024 * 1024) return J(400, { error: 'Image too large. Max 5MB.' });
+        if (!image?.data?.length || !/^(image|video)\//i.test(image.mimetype)) return J(400, { error: 'An image or video banner is required' });
+        if (image.data.length > 20 * 1024 * 1024) return J(400, { error: 'Media too large. Max 20MB.' });
         const imageUrl = await r2Upload(image, 'banners');
-        return J(200, { success: true, imageUrl, placement });
+        return J(200, { success: true, imageUrl, mediaType: image.mimetype.startsWith('video/') ? 'video' : 'image', placement });
     }
     if (method === 'PATCH' && pathname === '/api/admin/banners') {
         if (!user?.isAdmin) return J(403, { error: 'Admin only' });
@@ -3236,6 +3236,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!bannerPlacements.includes(placement)) return J(400, { error: 'Invalid banner placement' });
         const imageUrl = String(body.imageUrl || '').trim().substring(0, 2000);
         const linkUrl = String(body.linkUrl || '').trim().substring(0, 2000);
+        const mediaType = body.mediaType === 'video' ? 'video' : 'image';
         if (!/^https?:\/\//i.test(imageUrl)) return J(400, { error: 'Banner image URL must be an http(s) URL' });
         if (linkUrl && !/^https?:\/\//i.test(linkUrl)) return J(400, { error: 'Click URL must be an http(s) URL' });
         const startDate = body.startAt ? new Date(body.startAt) : null;
@@ -3250,6 +3251,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             placement,
             enabled: body.enabled !== false,
             imageUrl,
+            mediaType,
             linkUrl,
             title: String(body.title || '').trim().substring(0, 120),
             startAt: startDate ? startDate.toISOString() : null,
