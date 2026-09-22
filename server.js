@@ -3199,6 +3199,67 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         return J(200, { success: true, enabled: values.enabled, imageUrl, title: values.title, message: values.message, linkUrl });
     }
 
+    // ── CAMPAIGN BANNERS ───────────────────────────────────
+    const bannerPlacements = ['homepage', 'featured-artist', 'genre', 'event-campaign'];
+    const bannerPlacement = pathname.match(/^\/api\/admin\/banners\/([^/]+)$/)?.[1]
+        || q.get('placement') || '';
+    if (method === 'GET' && pathname === '/api/banners') {
+        const result = await query("SELECT key, value FROM site_settings WHERE key LIKE 'banner_%'");
+        const now = Date.now();
+        const banners = result.rows.map(row => {
+            try { return JSON.parse(row.value); } catch { return null; }
+        }).filter(b => b && b.enabled && (!b.startAt || new Date(b.startAt).getTime() <= now) && (!b.endAt || new Date(b.endAt).getTime() >= now));
+        return JC(200, { banners }, 30);
+    }
+    if (method === 'GET' && pathname === '/api/admin/banners') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const result = await query("SELECT key, value, updated_at FROM site_settings WHERE key LIKE 'banner_%' ORDER BY updated_at DESC");
+        return J(200, { banners: result.rows.map(row => {
+            try { return { ...JSON.parse(row.value), updatedAt: row.updated_at }; } catch { return null; }
+        }).filter(Boolean) });
+    }
+    if (method === 'POST' && pathname === '/api/admin/banners/upload') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const { fields, files } = await parseMultipart(req);
+        const placement = String(fields.placement || '').trim();
+        const image = files.image;
+        if (!bannerPlacements.includes(placement)) return J(400, { error: 'Invalid banner placement' });
+        if (!image?.data?.length || !image.mimetype.startsWith('image/')) return J(400, { error: 'A banner image is required' });
+        if (image.data.length > 5 * 1024 * 1024) return J(400, { error: 'Image too large. Max 5MB.' });
+        const imageUrl = await r2Upload(image, 'banners');
+        return J(200, { success: true, imageUrl, placement });
+    }
+    if (method === 'PATCH' && pathname === '/api/admin/banners') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const body = await parseJSON(req);
+        const placement = String(body.placement || '').trim();
+        if (!bannerPlacements.includes(placement)) return J(400, { error: 'Invalid banner placement' });
+        const imageUrl = String(body.imageUrl || '').trim().substring(0, 2000);
+        const linkUrl = String(body.linkUrl || '').trim().substring(0, 2000);
+        if (!/^https?:\/\//i.test(imageUrl)) return J(400, { error: 'Banner image URL must be an http(s) URL' });
+        if (linkUrl && !/^https?:\/\//i.test(linkUrl)) return J(400, { error: 'Click URL must be an http(s) URL' });
+        const banner = {
+            placement,
+            enabled: body.enabled !== false,
+            imageUrl,
+            linkUrl,
+            title: String(body.title || '').trim().substring(0, 120),
+            startAt: body.startAt ? new Date(body.startAt).toISOString() : null,
+            endAt: body.endAt ? new Date(body.endAt).toISOString() : null
+        };
+        await query(`INSERT INTO site_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+            ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`, [`banner_${placement}`, JSON.stringify(banner)]);
+        await logAdminAction(user.id, 'update_banner', `Updated ${placement} banner`, 'banner', null);
+        return J(200, { success: true, banner });
+    }
+    if (method === 'DELETE' && pathname === '/api/admin/banners') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const placement = String(q.get('placement') || '').trim();
+        if (!bannerPlacements.includes(placement)) return J(400, { error: 'Invalid banner placement' });
+        await query('DELETE FROM site_settings WHERE key=$1', [`banner_${placement}`]);
+        return J(200, { success: true });
+    }
+
     // ── WEEKLY TOP 10 EMAIL ────────────────────────────────
     if (method === 'POST' && pathname === '/api/admin/send-weekly-email') {
         if (!user?.isAdmin) return J(403, { error: 'Admin only' });
