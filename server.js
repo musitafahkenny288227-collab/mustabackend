@@ -845,7 +845,7 @@ function jsonRes(res, status, data, origin, cacheSeconds = 0, lastModified = nul
 }
 
 // ✅ FIX #3 + #12: enforce max body size, clear timeout on end
-const MAX_BODY_BYTES = 60 * 1024 * 1024; // 60MB
+const MAX_BODY_BYTES = 120 * 1024 * 1024; // 120MB
 
 function readBody(req, maxBytes = MAX_BODY_BYTES) {
     return new Promise((resolve, reject) => {
@@ -3225,7 +3225,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const image = files.image;
         if (!bannerPlacements.includes(placement)) return J(400, { error: 'Invalid banner placement' });
         if (!image?.data?.length || !/^(image|video)\//i.test(image.mimetype)) return J(400, { error: 'An image or video banner is required' });
-        if (image.data.length > 20 * 1024 * 1024) return J(400, { error: 'Media too large. Max 20MB.' });
+        if (image.data.length > 100 * 1024 * 1024) return J(400, { error: 'Media too large. Max 100MB.' });
         const imageUrl = await r2Upload(image, 'banners');
         return J(200, { success: true, imageUrl, mediaType: image.mimetype.startsWith('video/') ? 'video' : 'image', placement });
     }
