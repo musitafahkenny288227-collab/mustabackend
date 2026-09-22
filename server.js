@@ -1286,15 +1286,18 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         
         try {
             const { identifier, password } = await parseJSON(req);
+            const normalizedIdentifier = String(identifier || '').trim();
             
-            if (!identifier || !password) {
+            if (!normalizedIdentifier || !password) {
                 return J(400, { error:'Email/username and password are required' });
             }
             
-            // Find user by email or username
+            const lookupIdentifier = normalizedIdentifier.toLowerCase();
+
+            // Find user by email or username in a case-insensitive way
             const result = await query(
-                'SELECT * FROM users WHERE email=$1 OR username=$1',
-                [identifier.toLowerCase()]
+                'SELECT * FROM users WHERE LOWER(email)=LOWER($1) OR LOWER(username)=LOWER($1) LIMIT 1',
+                [lookupIdentifier]
             );
             
             if (result.rows.length === 0) {
@@ -1302,21 +1305,22 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             }
             
             const user = result.rows[0];
+            const storedHash = user.password_hash || '';
             
             // Check if user has password (some users might only have Google OAuth)
-            if (!user.password_hash || user.password_hash === '' || user.password_hash === null) {
-                console.log(`[Auth] User ${user.username} has no password - likely Google OAuth user`);
-                return J(401, { error:'This account was created with Google Sign-In. Please use the "Continue with Google" button instead.' });
+            if (!storedHash || storedHash === '' || storedHash === null || !storedHash.startsWith('$2')) {
+                console.log(`[Auth] User ${user.username} has no usable password hash - likely Google OAuth user or legacy account`);
+                return J(401, { error:'This account was created with Google Sign-In or uses an older password format. Please use the "Continue with Google" button or reset your password.' });
             }
             
-            // Check password - wrapped in try/catch in case bcrypt fails
+            // Check password - malformed legacy hashes should return a proper 401 instead of crashing
             let validPassword = false;
             try {
-                validPassword = await bcrypt.compare(password, user.password_hash);
+                validPassword = await bcrypt.compare(password, storedHash);
             } catch (bcryptError) {
                 console.error('[Auth] Bcrypt error:', bcryptError.message);
-                console.error('[Auth] User:', user.username, 'Password hash length:', user.password_hash?.length);
-                return J(500, { error:'Authentication error. This account may need to be recreated. Please contact support or try registering with a new username.' });
+                console.error('[Auth] User:', user.username, 'Password hash length:', storedHash?.length, 'Hash prefix:', storedHash?.slice(0, 10));
+                return J(401, { error:'This account has an older or invalid password format. Please reset your password or use Google Sign-In.' });
             }
             
             if (!validPassword) {
