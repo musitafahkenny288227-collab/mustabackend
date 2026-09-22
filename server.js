@@ -3238,14 +3238,22 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const linkUrl = String(body.linkUrl || '').trim().substring(0, 2000);
         if (!/^https?:\/\//i.test(imageUrl)) return J(400, { error: 'Banner image URL must be an http(s) URL' });
         if (linkUrl && !/^https?:\/\//i.test(linkUrl)) return J(400, { error: 'Click URL must be an http(s) URL' });
+        const startDate = body.startAt ? new Date(body.startAt) : null;
+        const endDate = body.endAt ? new Date(body.endAt) : null;
+        if ((startDate && Number.isNaN(startDate.getTime())) || (endDate && Number.isNaN(endDate.getTime()))) {
+            return J(400, { error: 'Banner dates must be valid dates' });
+        }
+        if (startDate && endDate && endDate < startDate) {
+            return J(400, { error: 'Banner end date must be on or after the start date' });
+        }
         const banner = {
             placement,
             enabled: body.enabled !== false,
             imageUrl,
             linkUrl,
             title: String(body.title || '').trim().substring(0, 120),
-            startAt: body.startAt ? new Date(body.startAt).toISOString() : null,
-            endAt: body.endAt ? new Date(body.endAt).toISOString() : null
+            startAt: startDate ? startDate.toISOString() : null,
+            endAt: endDate ? endDate.toISOString() : null
         };
         await query(`INSERT INTO site_settings (key, value, updated_at) VALUES ($1, $2, NOW())
             ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`, [`banner_${placement}`, JSON.stringify(banner)]);
