@@ -1181,7 +1181,7 @@ const server = http.createServer(async (req, res) => {
 ${staticUrls}
 ${songUrls}
 </urlset>`;
-            res.writeHead(200, { 'Content-Type':'application/xml', 'Cache-Control':'public,max-age=3600', ...corsHeaders(origin) });
+            res.writeHead(200, { 'Content-Type':'application/xml', 'Cache-Control':'public,max-age=300,s-maxage=300,stale-while-revalidate=60', ...corsHeaders(origin) });
             return res.end(xml);
         } catch(e) {
             res.writeHead(500); return res.end('Sitemap error');
@@ -1786,6 +1786,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             [title.trim(), artist.trim(), genre||'Other', duration||'0:00',
              file_path.trim(), cover_path||null, lyrics||'', description||'', albumName || null, yr, user.id]
         );
+        clearQueryCache();
         pingSearchEngines().catch(() => {});
         return J(201, { success:true, song: r.rows[0] });
     }
@@ -1942,6 +1943,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             } catch(error) {
                 errors.push({ index: i, filename: songFiles[i]?.filename || 'Unknown', error: error.message });
             }
+        }
+        if (results.length && user.isAdmin) {
+            clearQueryCache();
+            pingSearchEngines().catch(() => {});
         }
         return J(200, { success: true, totalProcessed: songFiles.length, successful: results.length, failed: errors.length, results, errors });
     }
@@ -2227,11 +2232,22 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     // ── DOWNLOAD FILE (✅ FIX #4 + #15) ─────────────────────
     if (method === 'GET' && seg[0]==='songs' && seg[2]==='download-file') {
-        if (downloadRateLimit(ip)) return J(429, { error: 'Slow down' });
         const r = await query('SELECT * FROM songs WHERE id=$1 AND approved=TRUE', [seg[1]]);
         if (!r.rows[0]) return J(404, { error:'Not found' });
 
         const song = r.rows[0];
+        if (q.get('raw') !== '1') {
+            const downloadUrl = new URL('https://djmusta.com/');
+            downloadUrl.searchParams.set('download', String(song.id));
+            res.writeHead(302, {
+                'Location': downloadUrl.toString(),
+                'Cache-Control': 'no-store',
+                ...corsHeaders(origin)
+            });
+            return res.end();
+        }
+        if (downloadRateLimit(ip)) return J(429, { error: 'Slow down' });
+
         const fileUrl = song.file_path;
         const cleanTitle = song.title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'song';
         const cleanArtist = song.artist.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '_') || 'artist';
