@@ -3200,7 +3200,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     }
 
     // ── CAMPAIGN BANNERS ───────────────────────────────────
-    const bannerPlacements = ['homepage', 'featured-artist', 'genre', 'event-campaign'];
+    const bannerPlacements = [
+        'homepage', 'featured-artist', 'genre', 'event-campaign',
+        'homepage-ad-1', 'homepage-ad-2', 'homepage-ad-3', 'homepage-ad-4'
+    ];
     const bannerPlacement = pathname.match(/^\/api\/admin\/banners\/([^/]+)$/)?.[1]
         || q.get('placement') || '';
     if (method === 'GET' && pathname === '/api/banners') {
