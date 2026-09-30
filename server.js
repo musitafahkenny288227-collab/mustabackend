@@ -299,6 +299,19 @@ function validateFile(fileObj, type) {
     return null;
 }
 
+function normalizeReleaseDate(value) {
+    const match = /^(\d{4})[/-](\d{2})[/-](\d{2})$/.exec(String(value || '').trim());
+    if (!match) return null;
+    const [, year, month, day] = match;
+    const yearNumber = Number(year);
+    const date = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+    if (yearNumber < 1900 || yearNumber > 2100 ||
+        date.getUTCFullYear() !== yearNumber ||
+        date.getUTCMonth() + 1 !== Number(month) ||
+        date.getUTCDate() !== Number(day)) return null;
+    return `${year}-${month}-${day}`;
+}
+
 // ============================================================
 // DATABASE
 // ============================================================
@@ -643,6 +656,7 @@ async function initDB() {
     await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS twitter TEXT DEFAULT ''`);
     await query(`ALTER TABLE artists ADD COLUMN IF NOT EXISTS facebook TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS release_year INTEGER DEFAULT EXTRACT(YEAR FROM NOW())::int`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS release_date DATE`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS file_size BIGINT`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS producer TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS album TEXT DEFAULT ''`);
@@ -1727,7 +1741,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const songs = await dataQuery(
             `SELECT s.id, s.title, s.artist, s.genre, s.duration, s.file_path, s.file_size,
                     s.cover_path, s.cover_image, s.uploaded_by, s.play_count, 
-                    s.download_count, s.like_count, s.created_at, s.release_year,
+                    s.download_count, s.like_count, s.created_at, s.release_year, s.release_date,
                     s.is_featured, s.is_song_of_day, s.album, s.producer,
                     COALESCE(vr.status,'none') as uploader_verified
              FROM songs s
@@ -1773,18 +1787,20 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── ADMIN QUICK-ADD (✅ FIX #26: validate URL) ──────────
     if (method === 'POST' && pathname === '/api/songs/admin/add') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const { title, artist, genre, duration, file_path, cover_path, lyrics, description, release_year, releaseYear, album } = await parseJSON(req);
+        const { title, artist, genre, duration, file_path, cover_path, lyrics, description, release_date, album } = await parseJSON(req);
         if (!title || !artist) return J(400, { error:'title and artist are required' });
         if (!file_path) return J(400, { error:'file_path (audio URL) is required' });
         if (!/^https?:\/\//i.test(file_path)) return J(400, { error:'file_path must be an http(s) URL' });
         if (cover_path && !/^https?:\/\//i.test(cover_path)) return J(400, { error:'cover_path must be an http(s) URL' });
-        const yr = release_year || releaseYear || new Date().getFullYear();
+        const releaseDate = normalizeReleaseDate(release_date);
+        if (!releaseDate) return J(400, { error:'release_date must be a valid YYYY/MM/DD date' });
+        const yr = Number(releaseDate.slice(0, 4));
         const albumName = (album || '').trim();
         const r = await query(
-            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, description, album, release_year, approved, uploaded_by, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,NOW()) RETURNING *`,
+            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, description, album, release_year, release_date, approved, uploaded_by, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,TRUE,$12,NOW()) RETURNING *`,
             [title.trim(), artist.trim(), genre||'Other', duration||'0:00',
-             file_path.trim(), cover_path||null, lyrics||'', description||'', albumName || null, yr, user.id]
+             file_path.trim(), cover_path||null, lyrics||'', description||'', albumName || null, yr, releaseDate, user.id]
         );
         clearQueryCache();
         pingSearchEngines().catch(() => {});
@@ -1845,7 +1861,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const album = (fields.album || '').trim();
         const description = (fields.description || '').trim();
         const producer    = (fields.producer || '').trim();
-        const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
+        const releaseDate = normalizeReleaseDate(fields.release_date);
+        if (!releaseDate) return J(400, { error:'A valid release_date in YYYY/MM/DD format is required' });
+        const releaseYear = Number(releaseDate.slice(0, 4));
         if (!title?.trim())  return J(400, { error:'Title required' });
         if (!artist?.trim()) return J(400, { error:'Artist required' });
         if (!files.song)     return J(400, { error:'Audio file required' });
@@ -1868,8 +1886,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
 
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,album) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, files.song.data.length, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,album,release_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, files.song.data.length, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null, releaseDate]
         );
         
         // Clear cache when new song added
@@ -1908,6 +1926,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             .map(key => files[key]);
 
         if (songFiles.length === 0) return J(400, { error: 'No song files provided' });
+        const releaseDates = (fields.release_dates || '').split(',').map(normalizeReleaseDate);
+        if (releaseDates.length !== songFiles.length || releaseDates.some(date => !date)) {
+            return J(400, { error: 'Provide one valid YYYY/MM/DD release date for each song file' });
+        }
 
         for (let i = 0; i < songFiles.length; i++) {
             try {
@@ -1936,8 +1958,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 }
 
                 const r = await query(
-                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,file_size,cover_path,uploaded_by,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
-                    [title, artist, genre, duration, '', filePath, songFile.data.length, coverPath, user.id, !!user.isAdmin]
+                    'INSERT INTO songs (title,artist,genre,duration,lyrics,file_path,file_size,cover_path,uploaded_by,release_year,release_date,approved) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+                    [title, artist, genre, duration, '', filePath, songFile.data.length, coverPath, user.id, Number(releaseDates[i].slice(0, 4)), releaseDates[i], !!user.isAdmin]
                 );
                 results.push({ index: i, success: true, song: r.rows[0] });
             } catch(error) {
@@ -2044,7 +2066,12 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
-        const allowed = ['title','artist','genre','duration','lyrics','description','release_year','album',
+        if (body.release_date !== undefined) {
+            body.release_date = normalizeReleaseDate(body.release_date);
+            if (!body.release_date) return J(400, { error:'release_date must be a valid YYYY/MM/DD date' });
+            body.release_year = Number(body.release_date.slice(0, 4));
+        }
+        const allowed = ['title','artist','genre','duration','lyrics','description','release_year','release_date','album',
                          'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer','video_url'];
         const sets = []; const vals = [];
         for (const key of allowed) {
@@ -3371,7 +3398,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const description = (fields.description || '').trim();
         const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
-        const releaseYear = fields.release_year ? parseInt(fields.release_year) : new Date().getFullYear();
+        const releaseDate = normalizeReleaseDate(fields.release_date);
+        if (!releaseDate) return J(400, { error: 'A valid release_date in YYYY/MM/DD format is required' });
+        const releaseYear = Number(releaseDate.slice(0, 4));
         const songFile = files.song || files.audio || files.file || null;
         const coverFile = files.cover || files.image || files.coverImage || null;
 
@@ -3401,10 +3430,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
 
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,video_url,album)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11,$12,$13,$14) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,video_url,album,release_date)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11,$12,$13,$14,$15) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', description, filePath, songFile.data.length, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null]
+             lyrics||'', description, filePath, songFile.data.length, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null, releaseDate]
         );
         const newSong = r.rows[0];
         await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
