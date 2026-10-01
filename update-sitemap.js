@@ -30,39 +30,30 @@ function esc(str) {
     return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function sanitizeSongsForSitemap(songs = []) {
-    const list = Array.isArray(songs) ? songs : [];
-    const valid = list.filter(s => {
-        if (!s) return false;
-        return String(s.title || '').trim().length > 0 && String(s.artist || '').trim().length > 0;
-    });
-    const skipped = list.length - valid.length;
-    if (skipped > 0) {
-        console.warn(`[Sitemap] Skipped ${skipped} invalid song record(s) without title/artist while generating sitemap.`);
-    }
-    return valid;
-}
-
 // ============================================================
 // BUILD XML
 // ============================================================
 function buildXml(songs) {
-    const validSongs = sanitizeSongsForSitemap(songs);
     const today = new Date().toISOString().split('T')[0];
 
     const staticPages = [
-        { loc: `${SITE_URL}`,                  changefreq: 'daily',   priority: '1.0'  },
-        { loc: `${SITE_URL}/new-music`,        changefreq: 'daily',   priority: '0.95' },
-        { loc: `${SITE_URL}/top-songs`,        changefreq: 'weekly',  priority: '0.92' },
-        { loc: `${SITE_URL}/top-artists`,      changefreq: 'weekly',  priority: '0.90' },
-        { loc: `${SITE_URL}/nonstops`,         changefreq: 'weekly',  priority: '0.88' },
-        { loc: `${SITE_URL}/gospel`,           changefreq: 'weekly',  priority: '0.88' },
-        { loc: `${SITE_URL}/artist-upload`,    changefreq: 'monthly', priority: '0.80' },
-        { loc: `${SITE_URL}/about`,            changefreq: 'monthly', priority: '0.60' },
-        { loc: `${SITE_URL}/contact`,          changefreq: 'monthly', priority: '0.60' },
-        { loc: `${SITE_URL}/copyright`,        changefreq: 'yearly',  priority: '0.40' },
-        { loc: `${SITE_URL}/privacy-policy`,   changefreq: 'yearly',  priority: '0.30' },
-        { loc: `${SITE_URL}/terms`,            changefreq: 'yearly',  priority: '0.30' },
+        { loc: `${SITE_URL}`,                    changefreq: 'daily',   priority: '1.0'  },
+        { loc: `${SITE_URL}/monetize.html`,      changefreq: 'weekly',  priority: '0.85' },
+        { loc: `${SITE_URL}/contact-sales.html`,  changefreq: 'weekly',  priority: '0.85' },
+        { loc: `${SITE_URL}/sponsor.html`,        changefreq: 'weekly',  priority: '0.80' },
+        { loc: `${SITE_URL}/premium.html`,        changefreq: 'weekly',  priority: '0.80' },
+        { loc: `${SITE_URL}/featured-artists.html`, changefreq: 'weekly', priority: '0.80' },
+        { loc: `${SITE_URL}/new-music`,           changefreq: 'daily',   priority: '0.95' },
+        { loc: `${SITE_URL}/top-songs`,          changefreq: 'weekly',  priority: '0.92' },
+        { loc: `${SITE_URL}/top-artists`,        changefreq: 'weekly',  priority: '0.90' },
+        { loc: `${SITE_URL}/nonstops`,           changefreq: 'weekly',  priority: '0.88' },
+        { loc: `${SITE_URL}/gospel`,             changefreq: 'weekly',  priority: '0.88' },
+        { loc: `${SITE_URL}/artist-upload`,      changefreq: 'monthly', priority: '0.80' },
+        { loc: `${SITE_URL}/about`,              changefreq: 'monthly', priority: '0.60' },
+        { loc: `${SITE_URL}/contact`,            changefreq: 'monthly', priority: '0.60' },
+        { loc: `${SITE_URL}/copyright`,          changefreq: 'yearly',  priority: '0.40' },
+        { loc: `${SITE_URL}/privacy-policy`,     changefreq: 'yearly',  priority: '0.30' },
+        { loc: `${SITE_URL}/terms`,              changefreq: 'yearly',  priority: '0.30' },
     ];
 
     const staticUrls = staticPages.map(p =>
@@ -70,7 +61,7 @@ function buildXml(songs) {
     ).join('\n');
 
     const seenSongUrls = new Set();
-    const songUrls = validSongs.map(s => {
+    const songUrls = songs.map(s => {
         const titleSlug  = createSlug(s.title)  || `song-${s.id}`;
         const artistSlug = createSlug(s.artist) || 'unknown';
         let songUrl = `${SITE_URL}/song/${titleSlug}/${artistSlug}`;
@@ -108,7 +99,7 @@ function buildXml(songs) {
 
 ${staticUrls}
 
-  <!-- Song pages (${validSongs.length} valid songs) -->
+  <!-- Song pages (${songs.length} songs) -->
 ${songUrls}
 </urlset>`;
 }
@@ -119,13 +110,9 @@ ${songUrls}
 // ============================================================
 function generateSitemap(songs) {
     try {
-        const validSongs = sanitizeSongsForSitemap(songs);
-        const xml = buildXml(validSongs);
+        const xml = buildXml(songs);
         fs.writeFileSync(SITEMAP_PATH, xml, 'utf8');
-        console.log(`[Sitemap] ✅ Written to ${SITEMAP_PATH} — ${validSongs.length} valid song URLs + static pages`);
-        if (Array.isArray(songs) && songs.length !== validSongs.length) {
-            console.warn(`[Sitemap] Input songs: ${songs.length}. Valid songs for sitemap: ${validSongs.length}.`);
-        }
+        console.log(`[Sitemap] ✅ Written to ${SITEMAP_PATH} — ${songs.length} songs + static pages`);
         return true;
     } catch (e) {
         console.error('[Sitemap] ❌ Write error:', e.message);
