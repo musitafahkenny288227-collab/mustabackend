@@ -2136,6 +2136,16 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
     }
 
+    // ── LIKE STATUS ───────────────────────────────────────
+    if (method === 'GET' && seg[0]==='songs' && seg[1] && seg[2]==='like') {
+        if (!user) return J(401, { error:'Login required' });
+        const songId = parseInt(seg[1]);
+        const song = await query('SELECT like_count FROM songs WHERE id=$1 AND approved=TRUE', [songId]);
+        if (!song.rows[0]) return J(404, { error:'Not found' });
+        const exists = await query('SELECT 1 FROM likes WHERE user_id=$1 AND song_id=$2', [user.id, songId]);
+        return J(200, { liked: exists.rows.length > 0, likeCount: song.rows[0].like_count });
+    }
+
     // ── LIKE ───────────────────────────────────────────────
     if (method === 'POST' && seg[0]==='songs' && seg[2]==='like') {
         if (!user) return J(401, { error:'Login required' });
