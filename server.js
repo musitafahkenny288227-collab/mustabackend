@@ -299,8 +299,10 @@ function validateFile(fileObj, type) {
     return null;
 }
 
-function normalizeReleaseDate(value) {
-    const match = /^(\d{4})[/-](\d{2})[/-](\d{2})$/.exec(String(value || '').trim());
+function normalizeReleaseDate(value, defaultToToday = false) {
+    const input = String(value || '').trim();
+    if (!input && defaultToToday) return new Date().toISOString().slice(0, 10);
+    const match = /^(\d{4})[/-](\d{2})[/-](\d{2})$/.exec(input);
     if (!match) return null;
     const [, year, month, day] = match;
     const yearNumber = Number(year);
@@ -1792,7 +1794,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!file_path) return J(400, { error:'file_path (audio URL) is required' });
         if (!/^https?:\/\//i.test(file_path)) return J(400, { error:'file_path must be an http(s) URL' });
         if (cover_path && !/^https?:\/\//i.test(cover_path)) return J(400, { error:'cover_path must be an http(s) URL' });
-        const releaseDate = normalizeReleaseDate(release_date);
+        const releaseDate = normalizeReleaseDate(release_date, true);
         if (!releaseDate) return J(400, { error:'release_date must be a valid YYYY/MM/DD date' });
         const yr = Number(releaseDate.slice(0, 4));
         const albumName = (album || '').trim();
@@ -1861,7 +1863,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const album = (fields.album || '').trim();
         const description = (fields.description || '').trim();
         const producer    = (fields.producer || '').trim();
-        const releaseDate = normalizeReleaseDate(fields.release_date);
+        const releaseDate = normalizeReleaseDate(fields.release_date, true);
         if (!releaseDate) return J(400, { error:'A valid release_date in YYYY/MM/DD format is required' });
         const releaseYear = Number(releaseDate.slice(0, 4));
         if (!title?.trim())  return J(400, { error:'Title required' });
@@ -3408,7 +3410,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const description = (fields.description || '').trim();
         const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
-        const releaseDate = normalizeReleaseDate(fields.release_date);
+        const releaseDate = normalizeReleaseDate(fields.release_date, true);
         if (!releaseDate) return J(400, { error: 'A valid release_date in YYYY/MM/DD format is required' });
         const releaseYear = Number(releaseDate.slice(0, 4));
         const songFile = files.song || files.audio || files.file || null;
