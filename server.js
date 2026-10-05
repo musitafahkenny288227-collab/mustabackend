@@ -1489,10 +1489,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (newPassword.length < 6) return J(400, { error:'New password must be at least 6 characters' });
         const r = await query('SELECT * FROM users WHERE id=$1', [user.id]);
         if (!r.rows[0]) return J(404, { error:'User not found' });
-        if (!verifyPassword(currentPassword, r.rows[0].password))
+        if (!verifyPassword(currentPassword, r.rows[0].password_hash || ''))
             return J(401, { error:'Current password is incorrect' });
         // ✅ FIX #28: bump token_version, invalidating all sessions
-        await query('UPDATE users SET password=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
+        await query('UPDATE users SET password_hash=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
             [hashPassword(newPassword), user.id]);
         return J(200, { success:true, message:'Password changed successfully' });
     }
@@ -1603,8 +1603,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const r = await query('SELECT * FROM users WHERE reset_token=$1', [resetToken]);
         if (!r.rows[0]) return J(400, { error:'Invalid or expired reset link' });
         if (new Date(r.rows[0].reset_token_expiry) < new Date()) return J(400, { error:'Reset link has expired.' });
-        // ✅ FIX #28: bump token_version
-        await query('UPDATE users SET password=$1, reset_token=NULL, reset_token_expiry=NULL, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
+        // ✅ FIX #28: bump token_version and clear reset token
+        await query('UPDATE users SET password_hash=$1, reset_token=NULL, reset_token_expiry=NULL, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
             [hashPassword(newPassword), r.rows[0].id]);
         return J(200, { success:true, message:'Password reset successfully!' });
     }
@@ -2996,7 +2996,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const { newPassword } = await parseJSON(req);
         if (!newPassword || newPassword.length < 6) return J(400, { error:'Password must be at least 6 characters' });
-        await query('UPDATE users SET password=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
+        await query('UPDATE users SET password_hash=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
             [hashPassword(newPassword), user.id]);
         return J(200, { success:true });
     }
