@@ -43,6 +43,14 @@ try {
 }
 
 const jwt = require('jsonwebtoken');
+const {
+    normalizeEmail,
+    validatePassword,
+    validateUsername,
+    sanitizeText
+} = require('./lib/validators');
+const { sendEmail, sendTelegramNewSong } = require('./lib/notifications');
+const { signJWT, verifyJWT, getUser } = require('./lib/auth');
 
 // ============================================================
 // WEB PUSH VAPID SETUP
@@ -63,91 +71,37 @@ try {
 }
 
 // ============================================================
-// EMAIL SETUP (Brevo)
+// EMAIL / TELEGRAM SETUP
 // ============================================================
-const EMAIL_USER = process.env.EMAIL_USER || 'musitafahkenny288227@gmail.com';
-const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
-const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.com';
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-
-async function sendEmail(to, subject, html) {
-    return new Promise((resolve) => {
-        const body = JSON.stringify({
-            sender: { name: 'DJ Musta Music', email: EMAIL_USER },
-            to: [{ email: to }],
-            subject,
-            htmlContent: html
-        });
-        const req = https.request({
-            hostname: 'api.brevo.com',
-            path: '/v3/smtp/email',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'api-key': BREVO_API_KEY,
-                'Content-Length': Buffer.byteLength(body)
-            }
-        }, res => {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => {
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    console.log('[Email] Sent to:', to);
-                    resolve(true);
-                } else {
-                    console.error('[Email] Failed:', res.statusCode, data);
-                    resolve(false);
-                }
-            });
-        });
-        req.on('error', e => { console.error('[Email] Error:', e.message); resolve(false); });
-        req.write(body);
-        req.end();
-    });
-}
-
-async function sendTelegramNewSong(song) {
-    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-    const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const message = `🎵 <b>New Song on DJ Musta</b>\n\n<b>${esc(song.title)}</b> by ${esc(song.artist)}\n\n<a href="${SITE_URL}/?song=${encodeURIComponent(song.id)}">Listen now</a>`;
-    const body = JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'HTML' });
-
-    await new Promise(resolve => {
-        const request = https.request({
-            hostname: 'api.telegram.org',
-            path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-        }, response => {
-            response.on('data', () => {});
-            response.on('end', resolve);
-        });
-        request.on('error', () => resolve());
-        request.write(body);
-        request.end();
-    });
-}
+// These actions are centralized in backend/lib/notifications.js.
 
 // ============================================================
 // CONFIG
 // ============================================================
-const PORT         = process.env.PORT || 5000;
-const JWT_SECRET   = process.env.JWT_SECRET;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://djmusta.com';
-const DATABASE_URL = process.env.DATABASE_URL;
+const {
+    PORT,
+    JWT_SECRET,
+    FRONTEND_URL,
+    DATABASE_URL,
+    R2_ACCOUNT_ID,
+    R2_ACCESS_KEY,
+    R2_SECRET_KEY,
+    R2_BUCKET,
+    R2_PUBLIC_URL,
+    SITE_URL,
+    VAPID_PUBLIC,
+    VAPID_EMAIL,
+    BREVO_API_KEY,
+    EMAIL_USER,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+    INDEXNOW_KEY,
+    missingEnv
+} = require('./lib/config');
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY;
-const R2_SECRET_KEY = process.env.R2_SECRET_KEY;
-const R2_BUCKET     = process.env.R2_BUCKET     || 'djmusta-music';
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || 'https://pub-1004f9c2790e44689198e9849c00fb9b.r2.dev';
-const R2_ENDPOINT   = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-
+const R2_ENDPOINT = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 const UPLOADS = path.join(__dirname, 'uploads');
 
-const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL', 'R2_ACCOUNT_ID', 'R2_ACCESS_KEY', 'R2_SECRET_KEY'];
-const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missingEnv.length > 0) {
     console.error('❌ MISSING REQUIRED ENV VARS:', missingEnv.join(', '));
     process.exit(1);
@@ -730,45 +684,6 @@ function verifyPassword(pw, stored) {
 }
 
 // ============================================================
-// JWT  (✅ FIX #28: include token_version)
-// ============================================================
-function b64url(str) {
-    return Buffer.from(str).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-}
-function b64decode(str) {
-    return Buffer.from(str.replace(/-/g,'+').replace(/_/g,'/'), 'base64').toString('utf8');
-}
-function signJWT(payload) {
-    const header = b64url(JSON.stringify({ alg:'HS256', typ:'JWT' }));
-    const body   = b64url(JSON.stringify({
-        ...payload,
-        iat: Math.floor(Date.now()/1000),
-        exp: Math.floor(Date.now()/1000) + 60*60*24*7
-    }));
-    const sig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-    return `${header}.${body}.${sig}`;
-}
-function verifyJWT(token) {
-    try {
-        const parts = token.split('.');
-        if (parts.length !== 3) return null;
-        const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${parts[0]}.${parts[1]}`).digest('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-        // ✅ timing-safe compare
-        const a = Buffer.from(expected);
-        const b = Buffer.from(parts[2]);
-        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-        const payload = JSON.parse(b64decode(parts[1]));
-        if (payload.exp < Math.floor(Date.now()/1000)) return null;
-        return payload;
-    } catch { return null; }
-}
-function getUser(req) {
-    const auth = req.headers['authorization'] || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-    return token ? verifyJWT(token) : null;
-}
-
-// ============================================================
 // CORS
 // ============================================================
 const normalizeOrigin = origin => (origin || '').replace(/\/$/, '');
@@ -1087,8 +1002,136 @@ function serveStatic(req, res, filePath, origin) {
 }
 
 // ============================================================
-// SERVER
+// SEO SONG PAGE RENDERER
 // ============================================================
+function toSlug(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 80) || 'song';
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+async function renderSongPage(req, res, pathname, origin) {
+    const segments = pathname.split('/').filter(Boolean);
+    if (segments[0] !== 'song') {
+        return false;
+    }
+
+    const songPath = segments.slice(1).join('/');
+    const titleParam = decodeURIComponent((segments[1] || '')).replace(/-/g, ' ');
+    const artistParam = decodeURIComponent((segments[2] || '')).replace(/-/g, ' ');
+
+    let song = null;
+    if (segments[1] && /^\d+$/.test(segments[1])) {
+        const result = await query(
+            'SELECT * FROM songs WHERE id=$1 AND approved=TRUE',
+            [segments[1]]
+        );
+        song = result.rows[0] || null;
+    } else if (segments[1]) {
+        const titleSlug = segments[1];
+        const match = titleSlug.match(/^(.*)-(\d+)$/);
+        const plainTitleSlug = match ? match[1] : titleSlug;
+        const candidates = await query(
+            `SELECT * FROM songs
+             WHERE approved=TRUE
+               AND LOWER(title) LIKE $1
+               AND ($2 = '' OR LOWER(artist) LIKE $2)
+             ORDER BY created_at DESC
+             LIMIT 100`,
+            [`%${plainTitleSlug.replace(/-/g, ' ')}%`, artistParam ? `%${artistParam}%` : '']
+        );
+        song = candidates.rows.find(candidate => {
+            const candidateTitleSlug = toSlug(candidate.title);
+            const titleMatches = candidateTitleSlug === titleSlug ||
+                candidateTitleSlug === plainTitleSlug ||
+                (match && `${candidateTitleSlug}-${candidate.id}` === titleSlug);
+            return titleMatches &&
+                (!segments[2] || toSlug(candidate.artist) === segments[2]);
+        }) || null;
+    }
+
+    if (!song) {
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders(origin) });
+        res.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Song not found | DJ Musta</title></head><body><h1>Song not found</h1></body></html>');
+        return true;
+    }
+
+    const canonicalUrl = `https://djmusta.com/song/${songPath}`;
+    const title = `${song.title} by ${song.artist}`;
+    const description = `Listen to ${song.title} by ${song.artist}${song.genre ? `, ${song.genre}` : ''} on DJ Musta Music.`;
+    const cover = song.cover_image || song.cover_path || '';
+    const coverUrl = cover
+        ? (cover.startsWith('http') ? cover : `https://djmusta.com${cover.startsWith('/') ? '' : '/'}${cover}`)
+        : '';
+    const songUrl = song.file_path || '';
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)} | DJ Musta Music</title>
+<meta name="description" content="${escapeHtml(description)}">
+<link rel="canonical" href="${escapeHtml(canonicalUrl)}">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="music.song">
+<meta property="og:site_name" content="DJ Musta Music">
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+<meta property="og:url" content="${escapeHtml(canonicalUrl)}">
+${coverUrl ? `<meta property="og:image" content="${escapeHtml(coverUrl)}">` : ''}
+<meta name="twitter:card" content="${coverUrl ? 'summary_large_image' : 'summary'}">
+<meta name="twitter:title" content="${escapeHtml(title)}">
+<meta name="twitter:description" content="${escapeHtml(description)}">
+${coverUrl ? `<meta name="twitter:image" content="${escapeHtml(coverUrl)}">` : ''}
+<script type="application/ld+json">${JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'MusicRecording',
+        name: song.title,
+        byArtist: { '@type': 'MusicGroup', name: song.artist },
+        url: canonicalUrl,
+        ...(coverUrl ? { image: coverUrl } : {}),
+        ...(song.genre ? { genre: song.genre } : {}),
+        ...(song.release_year ? { datePublished: String(song.release_year) } : {})
+    }).replace(/</g, '\\u003c')}</script>
+</head>
+<body>
+<main>
+<nav aria-label="Breadcrumb"><a href="https://djmusta.com/">Home</a> &rsaquo; <a href="https://djmusta.com/new-music">Music</a> &rsaquo; ${escapeHtml(song.title)}</nav>
+<article>
+<h1>${escapeHtml(song.title)}</h1>
+<p>By <strong>${escapeHtml(song.artist)}</strong></p>
+${coverUrl ? `<img src="${escapeHtml(coverUrl)}" alt="${escapeHtml(title)} cover art" width="320" height="320">` : ''}
+${song.genre ? `<p>Genre: ${escapeHtml(song.genre)}</p>` : ''}
+${song.release_year ? `<p>Release year: ${escapeHtml(song.release_year)}</p>` : ''}
+${song.description ? `<p>${escapeHtml(song.description)}</p>` : ''}
+${songUrl ? `<audio controls preload="none" src="${escapeHtml(songUrl)}">Your browser does not support audio playback.</audio>` : ''}
+${songUrl ? `<p><a href="${escapeHtml(songUrl)}" download>Download ${escapeHtml(song.title)}</a></p>` : ''}
+</article>
+</main>
+</body>
+</html>`;
+
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=300',
+        'X-Robots-Tag': 'index, follow',
+        ...corsHeaders(origin)
+    });
+    res.end(html);
+    return true;
+}
+
 const server = http.createServer(async (req, res) => {
     const origin   = req.headers.origin || '';
     const parsed   = new URL(req.url, `http://localhost:${PORT}`);
@@ -1112,6 +1155,18 @@ const server = http.createServer(async (req, res) => {
 
     if (rateLimit(ip)) {
         return jsonResBound(429, { error: 'Too many requests. Please slow down.' });
+    }
+
+    if (pathname.startsWith('/song/')) {
+        try {
+            return await renderSongPage(req, res, pathname, origin);
+        } catch (e) {
+            console.error('[Song page error]', e);
+            if (!res.headersSent) {
+                jsonResBound(500, { error: 'Could not render song page' });
+            }
+            return;
+        }
     }
 
     if (pathname.startsWith('/api/')) {
@@ -1226,28 +1281,28 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         
         try {
             const { email, username, password, fullName } = await parseJSON(req);
-            
+            const safeEmail = normalizeEmail(email);
+            const safeUsername = sanitizeText(username, 50);
+            const safeFullName = sanitizeText(fullName || safeUsername, 120);
+
             // Validation
-            if (!email || !username || !password) {
+            if (!safeEmail || !safeUsername || !password) {
                 return J(400, { error:'Email, username, and password are required' });
             }
-            if (password.length < 6) {
+            if (!validatePassword(password)) {
                 return J(400, { error:'Password must be at least 6 characters' });
             }
-            if (username.length < 3 || username.length > 50) {
-                return J(400, { error:'Username must be 3-50 characters' });
+            if (!validateUsername(safeUsername)) {
+                return J(400, { error:'Username must be 3-50 characters and contain only letters, numbers, and underscores' });
             }
-            if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-                return J(400, { error:'Username can only contain letters, numbers, and underscores' });
-            }
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
                 return J(400, { error:'Invalid email format' });
             }
             
             // Check if email or username already exists
             const existing = await query(
                 'SELECT id FROM users WHERE email=$1 OR username=$2',
-                [email.toLowerCase(), username.toLowerCase()]
+                [safeEmail, safeUsername.toLowerCase()]
             );
             if (existing.rows.length > 0) {
                 return J(409, { error:'Email or username already exists' });
@@ -1268,7 +1323,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                 `INSERT INTO users (email, username, password_hash, full_name, created_at) 
                  VALUES ($1, $2, $3, $4, NOW()) 
                  RETURNING id, email, username, full_name, created_at`,
-                [email.toLowerCase(), username.toLowerCase(), passwordHash, fullName || username]
+                [safeEmail, safeUsername.toLowerCase(), passwordHash, safeFullName]
             );
             
             const newUser = result.rows[0];
@@ -1302,10 +1357,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         
         try {
             const { identifier, password } = await parseJSON(req);
-            const normalizedIdentifier = String(identifier || '').trim();
+            const normalizedIdentifier = sanitizeText(identifier, 100);
             
             if (!normalizedIdentifier || !password) {
                 return J(400, { error:'Email/username and password are required' });
+            }
+            if (!validatePassword(password)) {
+                return J(400, { error:'Password must be at least 6 characters' });
             }
             
             const lookupIdentifier = normalizedIdentifier.toLowerCase();
@@ -1380,13 +1438,14 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
         
         const { email } = await parseJSON(req);
+        const safeEmail = normalizeEmail(email);
         
-        if (!email) {
-            return J(400, { error:'Email is required' });
+        if (!safeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
+            return J(400, { error:'A valid email is required' });
         }
         
         // Check if user exists
-        const result = await query('SELECT id, email, username FROM users WHERE email=$1', [email.toLowerCase()]);
+        const result = await query('SELECT id, email, username FROM users WHERE email=$1', [safeEmail]);
         
         // Always return success even if email doesn't exist (security best practice)
         if (result.rows.length === 0) {
@@ -1436,19 +1495,20 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (authRateLimit(ip)) return J(429, { error:'Too many attempts. Please wait.' });
         
         const { token: resetToken, newPassword } = await parseJSON(req);
+        const safeResetToken = sanitizeText(resetToken, 128);
         
-        if (!resetToken || !newPassword) {
+        if (!safeResetToken || !newPassword) {
             return J(400, { error:'Token and new password are required' });
         }
         
-        if (newPassword.length < 6) {
+        if (!validatePassword(newPassword)) {
             return J(400, { error:'Password must be at least 6 characters' });
         }
         
         // Find user with valid reset token
         const result = await query(
             'SELECT id, email, username FROM users WHERE reset_token=$1 AND reset_token_expiry > NOW()',
-            [resetToken]
+            [safeResetToken]
         );
         
         if (result.rows.length === 0) {
@@ -1489,10 +1549,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (newPassword.length < 6) return J(400, { error:'New password must be at least 6 characters' });
         const r = await query('SELECT * FROM users WHERE id=$1', [user.id]);
         if (!r.rows[0]) return J(404, { error:'User not found' });
-        if (!verifyPassword(currentPassword, r.rows[0].password_hash || ''))
+        if (!verifyPassword(currentPassword, r.rows[0].password))
             return J(401, { error:'Current password is incorrect' });
         // ✅ FIX #28: bump token_version, invalidating all sessions
-        await query('UPDATE users SET password_hash=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
+        await query('UPDATE users SET password=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
             [hashPassword(newPassword), user.id]);
         return J(200, { success:true, message:'Password changed successfully' });
     }
@@ -1603,8 +1663,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const r = await query('SELECT * FROM users WHERE reset_token=$1', [resetToken]);
         if (!r.rows[0]) return J(400, { error:'Invalid or expired reset link' });
         if (new Date(r.rows[0].reset_token_expiry) < new Date()) return J(400, { error:'Reset link has expired.' });
-        // ✅ FIX #28: bump token_version and clear reset token
-        await query('UPDATE users SET password_hash=$1, reset_token=NULL, reset_token_expiry=NULL, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
+        // ✅ FIX #28: bump token_version
+        await query('UPDATE users SET password=$1, reset_token=NULL, reset_token_expiry=NULL, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
             [hashPassword(newPassword), r.rows[0].id]);
         return J(200, { success:true, message:'Password reset successfully!' });
     }
@@ -2996,7 +3056,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const { newPassword } = await parseJSON(req);
         if (!newPassword || newPassword.length < 6) return J(400, { error:'Password must be at least 6 characters' });
-        await query('UPDATE users SET password_hash=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
+        await query('UPDATE users SET password=$1, token_version=COALESCE(token_version,0)+1 WHERE id=$2',
             [hashPassword(newPassword), user.id]);
         return J(200, { success:true });
     }
