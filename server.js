@@ -55,20 +55,7 @@ const { signJWT, verifyJWT, getUser } = require('./lib/auth');
 // ============================================================
 // WEB PUSH VAPID SETUP
 // ============================================================
-const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BAonU5h2RMD7db5Zl3gGS_01GfXP0_tevIWydLGXvX4JTJOWpkku-ag-be63rkPoGCs9CSka6y--ktyq-kJvYxw';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-const VAPID_EMAIL   = process.env.VAPID_EMAIL       || 'mailto:musitafahkenny288227@gmail.com';
-
-try {
-    if (VAPID_PRIVATE) {
-        webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
-        console.log('[Push] VAPID keys configured');
-    } else {
-        console.warn('[Push] VAPID_PRIVATE_KEY not set — push notifications disabled.');
-    }
-} catch(e) {
-    console.warn('[Push] VAPID setup failed:', e.message);
-}
 
 // ============================================================
 // EMAIL / TELEGRAM SETUP
@@ -98,6 +85,17 @@ const {
     INDEXNOW_KEY,
     missingEnv
 } = require('./lib/config');
+
+try {
+    if (VAPID_PRIVATE) {
+        webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
+        console.log('[Push] VAPID keys configured');
+    } else {
+        console.warn('[Push] VAPID_PRIVATE_KEY not set — push notifications disabled.');
+    }
+} catch(e) {
+    console.warn('[Push] VAPID setup failed:', e.message);
+}
 
 const R2_ENDPOINT = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 const UPLOADS = path.join(__dirname, 'uploads');
