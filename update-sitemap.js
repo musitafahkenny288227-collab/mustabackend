@@ -8,7 +8,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const https = require('https');
 
 const SITE_URL     = process.env.SITE_URL     || 'https://djmusta.com';
 // Path to the static sitemap served by Cloudflare Pages
@@ -121,33 +120,6 @@ function generateSitemap(songs) {
 }
 
 // ============================================================
-// PING SEARCH ENGINES
-// ============================================================
-async function pingSearchEngines() {
-    const sitemapUrl = encodeURIComponent(`${SITE_URL}/sitemap.xml`);
-    const urls = [
-        `https://www.google.com/ping?sitemap=${sitemapUrl}`,
-        `https://www.bing.com/ping?sitemap=${sitemapUrl}`,
-    ];
-
-    for (const url of urls) {
-        try {
-            await new Promise((resolve) => {
-                https.get(url, (res) => {
-                    console.log(`[Sitemap] Pinged: ${url.split('?')[0]} → ${res.statusCode}`);
-                    resolve();
-                }).on('error', (e) => {
-                    console.warn(`[Sitemap] Ping failed: ${e.message}`);
-                    resolve();
-                });
-            });
-        } catch (e) {
-            console.warn('[Sitemap] Ping error:', e.message);
-        }
-    }
-}
-
-// ============================================================
 // AUTO-UPDATE — called on song approval from server.js
 // Receives the pool/query function so we don't need a second DB connection.
 // ============================================================
@@ -176,4 +148,4 @@ async function updateSitemap(song, queryFn) {
     }
 }
 
-module.exports = { updateSitemap, pingSearchEngines, generateSitemap, createSlug };
+module.exports = { updateSitemap, generateSitemap, createSlug };
