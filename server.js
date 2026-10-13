@@ -582,6 +582,17 @@ async function initDB() {
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    await query(`CREATE TABLE IF NOT EXISTS song_reports (
+        id SERIAL PRIMARY KEY,
+        song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        category TEXT NOT NULL,
+        details TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        admin_notes TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        resolved_at TIMESTAMPTZ
+    )`);
     await query(`CREATE TABLE IF NOT EXISTS site_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL DEFAULT '',
@@ -2037,8 +2048,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
                 const followers = await query('SELECT u.id, u.email, u.username FROM follows f JOIN users u ON f.follower_id=u.id WHERE LOWER(f.artist_name)=LOWER($1)', [s.artist]);
                 for (const follower of followers.rows) {
-                    await query('INSERT INTO notifications (user_id,type,title,message) VALUES ($1,$2,$3,$4)',
-                        [follower.id, 'new_song', `🎵 ${s.artist} uploaded a new song!`, `"${s.title}" is now available on DJ Musta.`]);
+                    await query('INSERT INTO notifications (user_id,type,title,message,link) VALUES ($1,$2,$3,$4,$5)',
+                        [follower.id, 'new_song', `🎵 ${s.artist} uploaded a new song!`, `"${s.title}" is now available on DJ Musta.`, `/?song=${s.id}`]);
                 }
             }
         } catch (err) {
@@ -2922,12 +2933,20 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             SELECT s.id, s.title, s.artist, s.cover_path, s.play_count, s.download_count, s.like_count, s.created_at, s.approved
             FROM songs s WHERE s.uploaded_by=$1 ORDER BY s.play_count DESC
         `, [user.id]);
+        const daily = await query(`
+            SELECT d.day::date AS day, COUNT(p.id)::int AS plays
+            FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day') AS d(day)
+            LEFT JOIN songs s ON s.uploaded_by=$1
+            LEFT JOIN plays p ON p.song_id=s.id AND p.created_at >= d.day AND p.created_at < d.day + INTERVAL '1 day'
+            GROUP BY d.day
+            ORDER BY d.day
+        `, [user.id]);
         const totals = r.rows.reduce((acc, s) => ({
             plays: acc.plays + (s.play_count||0),
             downloads: acc.downloads + (s.download_count||0),
             likes: acc.likes + (s.like_count||0)
         }), {plays:0, downloads:0, likes:0});
-        return J(200, { songs: r.rows, totals });
+        return J(200, { songs: r.rows, totals, dailyPlays: daily.rows });
     }
 
     if (method === 'GET' && pathname === '/api/songs/featured') {
@@ -3471,6 +3490,61 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             return J(400, { error: 'Verification link has expired.' });
         await query('UPDATE users SET is_verified=TRUE, verify_token=NULL, verify_token_expiry=NULL WHERE id=$1', [r.rows[0].id]);
         return J(200, { success: true, message: 'Email verified successfully!' });
+    }
+
+    // ── SONG QUALITY REPORTS ───────────────────────────────
+    if (method === 'POST' && pathname === '/api/song-reports') {
+        if (rateLimit(ip + ':song-report', 5, 60 * 60 * 1000))
+            return J(429, { error: 'Too many reports. Please try again later.' });
+        const { song_id, category, details } = await parseJSON(req);
+        const songId = Number(song_id);
+        const allowedCategories = new Set(['incorrect_metadata', 'duplicate', 'audio_problem', 'other']);
+        const description = String(details || '').trim();
+        if (!Number.isSafeInteger(songId) || songId <= 0)
+            return J(400, { error: 'A valid song_id is required' });
+        if (!allowedCategories.has(category))
+            return J(400, { error: 'Choose a valid report category' });
+        if (description.length > 1000)
+            return J(400, { error: 'Report details must be 1000 characters or fewer' });
+        const song = await query('SELECT id,title FROM songs WHERE id=$1 AND approved=TRUE', [songId]);
+        if (!song.rows[0]) return J(404, { error: 'Song not found' });
+        const report = await query(
+            `INSERT INTO song_reports (song_id,reporter_id,category,details)
+             VALUES ($1,$2,$3,$4) RETURNING id, song_id, category, status, created_at`,
+            [songId, user?.id || null, category, description]
+        );
+        await query(
+            `INSERT INTO notifications (user_id,type,title,message,link)
+             SELECT id,$1,$2,$3,$4 FROM users WHERE is_admin=TRUE`,
+            ['song_report', `Song report: ${song.rows[0].title}`, `A listener reported ${category.replace(/_/g, ' ')}.`, `/?song=${songId}`]
+        );
+        return J(201, { success: true, report: report.rows[0] });
+    }
+    if (method === 'GET' && pathname === '/api/song-reports') {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const reports = await query(`
+            SELECT r.*, s.title AS song_title, s.artist AS song_artist, u.username AS reporter_name
+            FROM song_reports r
+            LEFT JOIN songs s ON s.id=r.song_id
+            LEFT JOIN users u ON u.id=r.reporter_id
+            ORDER BY r.created_at DESC
+            LIMIT 200
+        `);
+        return J(200, { reports: reports.rows });
+    }
+    if (method === 'PATCH' && seg[0] === 'song-reports' && seg[1]) {
+        if (!user?.isAdmin) return J(403, { error: 'Admin only' });
+        const { status, admin_notes } = await parseJSON(req);
+        if (!['reviewing', 'resolved', 'dismissed'].includes(status))
+            return J(400, { error: 'Status must be reviewing, resolved, or dismissed' });
+        const updated = await query(
+            `UPDATE song_reports SET status=$1, admin_notes=$2,
+             resolved_at=CASE WHEN $1='reviewing' THEN NULL ELSE NOW() END
+             WHERE id=$3 RETURNING id`,
+            [status, String(admin_notes || '').trim().slice(0, 1000), seg[1]]
+        );
+        if (!updated.rows[0]) return J(404, { error: 'Report not found' });
+        return J(200, { success: true });
     }
 
     // ── DMCA ───────────────────────────────────────────────
