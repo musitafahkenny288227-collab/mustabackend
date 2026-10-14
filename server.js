@@ -367,6 +367,152 @@ async function getAudioFileSize(fileUrl) {
     }
 }
 
+async function checkSongMediaUrl(fileUrl, mediaType) {
+    if (!fileUrl) return { status: 'missing', details: 'No file URL is saved.' };
+    if (!/^https?:\/\//i.test(fileUrl)) {
+        const localPath = fileUrl.startsWith('/')
+            ? path.join(__dirname, '..', fileUrl)
+            : path.join(__dirname, fileUrl);
+        return fs.existsSync(localPath)
+            ? { status: 'ok', details: 'Local file exists.' }
+            : { status: 'broken', details: 'Local file was not found on the server.' };
+    }
+
+    let mediaUrl;
+    try {
+        mediaUrl = new URL(fileUrl);
+        if (!['http:', 'https:'].includes(mediaUrl.protocol) || mediaUrl.username || mediaUrl.password) {
+            return { status: 'broken', details: 'Media URL is not a valid public HTTP(S) URL.' };
+        }
+    } catch {
+        return { status: 'broken', details: 'Media URL is invalid.' };
+    }
+
+    let response;
+    try {
+        response = await fetch(mediaUrl, {
+            method: 'HEAD',
+            redirect: 'manual',
+            signal: AbortSignal.timeout(8000)
+        });
+        if ([403, 405, 501].includes(response.status)) {
+            response = await fetch(mediaUrl, {
+                method: 'GET',
+                headers: { Range: 'bytes=0-0' },
+                redirect: 'manual',
+                signal: AbortSignal.timeout(8000)
+            });
+            if (response.body) await response.body.cancel();
+        }
+    } catch (error) {
+        return {
+            status: 'broken',
+            details: error.name === 'TimeoutError' || error.name === 'AbortError'
+                ? 'Media host did not respond before the check timed out.'
+                : 'Media host could not be reached.'
+        };
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+        return { status: 'broken', details: 'Media URL redirects instead of serving the file directly.' };
+    }
+    if (!response.ok) {
+        return { status: 'broken', details: `Media server returned HTTP ${response.status}.` };
+    }
+
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const expected = mediaType === 'audio' ? 'audio/' : 'image/';
+    if (contentType && contentType !== 'application/octet-stream' && !contentType.startsWith(expected)) {
+        return { status: 'broken', details: `Media server returned an unexpected ${mediaType} content type.` };
+    }
+    const contentLengthHeader = response.headers.get('content-length');
+    if (contentLengthHeader !== null && Number(contentLengthHeader) === 0) {
+        return { status: 'broken', details: 'Media file is empty.' };
+    }
+    return { status: 'ok', details: 'Media URL responded successfully.' };
+}
+
+let googleInspectionToken = null;
+let googleInspectionTokenExpiresAt = 0;
+
+function googleSearchConsoleConfigured() {
+    return Boolean(process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL?.trim() && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY?.trim());
+}
+
+function songCanonicalUrl(song) {
+    const slug = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+    return `${SITE_URL.replace(/\/+$/, '')}/song/${slug(song.title) || `song-${song.id}`}-${song.id}/${slug(song.artist) || 'unknown'}`;
+}
+
+async function getGoogleInspectionToken() {
+    if (!googleSearchConsoleConfigured()) {
+        throw new Error('Search Console is not configured. Add the Google service-account email and private key to backend environment variables.');
+    }
+    if (googleInspectionToken && Date.now() < googleInspectionTokenExpiresAt) return googleInspectionToken;
+
+    const email = process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL;
+    const privateKey = process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
+        iss: email,
+        scope: 'https://www.googleapis.com/auth/webmasters.readonly',
+        aud: 'https://oauth2.googleapis.com/token',
+        iat: issuedAt,
+        exp: issuedAt + 3600
+    })}`;
+    const assertion = `${unsigned}.${crypto.sign('RSA-SHA256', Buffer.from(unsigned), privateKey).toString('base64url')}`;
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            assertion
+        }),
+        signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error(`Google service-account authorization failed (HTTP ${response.status}).`);
+    const result = await response.json();
+    if (!result.access_token || !Number.isFinite(Number(result.expires_in))) {
+        throw new Error('Google service-account authorization returned an invalid access token.');
+    }
+    googleInspectionToken = result.access_token;
+    googleInspectionTokenExpiresAt = Date.now() + Math.max(0, Number(result.expires_in) - 60) * 1000;
+    return googleInspectionToken;
+}
+
+async function inspectGoogleIndex(url) {
+    const accessToken = await getGoogleInspectionToken();
+    const response = await fetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            inspectionUrl: url,
+            siteUrl: process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || 'sc-domain:djmusta.com',
+            languageCode: 'en-US'
+        }),
+        signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) throw new Error(`Google URL Inspection API returned HTTP ${response.status}.`);
+    const result = await response.json();
+    const status = result.inspectionResult?.indexStatusResult;
+    if (!status) throw new Error('Google URL Inspection API returned no index status.');
+    return {
+        verdict: String(status.verdict || 'UNKNOWN'),
+        coverageState: String(status.coverageState || ''),
+        indexingState: String(status.indexingState || ''),
+        pageFetchState: String(status.pageFetchState || ''),
+        robotsTxtState: String(status.robotsTxtState || ''),
+        googleCanonical: String(status.googleCanonical || ''),
+        userCanonical: String(status.userCanonical || ''),
+        lastCrawlTime: status.lastCrawlTime || null,
+        sitemaps: Array.isArray(status.sitemap) ? status.sitemap : []
+    };
+}
+
 // ✅ PERFORMANCE: Simple in-memory cache for frequently accessed queries
 const queryCache = new Map();
 const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
@@ -651,6 +797,21 @@ async function initDB() {
         heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
+    await query(`CREATE TABLE IF NOT EXISTS song_index_checks (
+        song_id INTEGER PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
+        inspected_url TEXT NOT NULL,
+        verdict TEXT NOT NULL DEFAULT 'UNKNOWN',
+        coverage_state TEXT NOT NULL DEFAULT '',
+        indexing_state TEXT NOT NULL DEFAULT '',
+        page_fetch_state TEXT NOT NULL DEFAULT '',
+        robots_txt_state TEXT NOT NULL DEFAULT '',
+        google_canonical TEXT NOT NULL DEFAULT '',
+        user_canonical TEXT NOT NULL DEFAULT '',
+        last_crawl_time TIMESTAMPTZ,
+        sitemaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+        error TEXT NOT NULL DEFAULT '',
+        checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
 
     // ✅ PERFORMANCE FIX: Create database indexes for faster queries
     console.log('Creating database indexes...');
@@ -703,6 +864,11 @@ async function initDB() {
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS video_url TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'pending'`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS review_notes TEXT NOT NULL DEFAULT ''`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS audio_check_status TEXT NOT NULL DEFAULT 'unchecked'`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS audio_check_details TEXT NOT NULL DEFAULT ''`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_check_status TEXT NOT NULL DEFAULT 'unchecked'`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_check_details TEXT NOT NULL DEFAULT ''`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS media_checked_at TIMESTAMPTZ`);
     await query(`UPDATE songs SET review_status='approved' WHERE approved=TRUE AND review_status='pending'`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMPTZ`);
@@ -1919,6 +2085,19 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         );
         return J(200, { listened_seconds: Number(updated.rows[0].listened_seconds) });
     }
+    if (method === 'POST' && seg[0]==='songs' && seg[1] && seg[2]==='review-preview-error') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const flagged = await query(
+            `UPDATE songs SET audio_check_status='broken',
+                audio_check_details='Admin preview failed to load; run a media check.',
+                media_checked_at=NOW()
+             WHERE id=$1 RETURNING id`,
+            [seg[1]]
+        );
+        if (!flagged.rows[0]) return J(404, { error:'Song not found' });
+        await logAdminAction(user.id, 'flag_song_audio_error', 'Admin preview failed to load', 'song', seg[1]);
+        return J(200, { success:true, audio_check_status:'broken' });
+    }
 
     // ── ADMIN USERS ────────────────────────────────────────
     if (method === 'GET' && pathname === '/api/songs/admin/users') {
@@ -2245,7 +2424,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             if (!body.release_date) return J(400, { error:'release_date must be a valid YYYY/MM/DD date' });
             body.release_year = Number(body.release_date.slice(0, 4));
         }
-        const allowed = ['title','artist','genre','duration','lyrics','description','release_year','release_date','album','cover_path',
+        const allowed = ['title','artist','genre','duration','lyrics','description','release_year','release_date','album','cover_path','file_path',
                          'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer','video_url'];
         const sets = []; const vals = [];
         for (const key of allowed) {
@@ -2260,6 +2439,9 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (body.cover_path !== undefined && body.cover_path && !/^https?:\/\//i.test(body.cover_path)) {
             return J(400, { error:'cover_path must be an http(s) URL' });
         }
+        if (body.file_path !== undefined && !/^https?:\/\//i.test(String(body.file_path || ''))) {
+            return J(400, { error:'file_path must be a non-empty http(s) URL' });
+        }
         if (!sets.length) return J(400, { error:'No valid fields' });
         if (body.is_song_of_day === true) {
             await query('UPDATE songs SET is_song_of_day=FALSE WHERE is_song_of_day=TRUE');
@@ -2268,6 +2450,22 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         if (!editedSong.rows[0]) return J(404, { error:'Song not found' });
         vals.push(seg[1]);
         await query('UPDATE songs SET '+sets.join(', ')+' WHERE id=$'+vals.length, vals);
+        if (body.file_path !== undefined || body.cover_path !== undefined) {
+            await query(
+                `UPDATE songs SET
+                    audio_check_status=CASE WHEN $1 THEN 'unchecked' ELSE audio_check_status END,
+                    audio_check_details=CASE WHEN $1 THEN '' ELSE audio_check_details END,
+                    cover_check_status=CASE WHEN $2 THEN 'unchecked' ELSE cover_check_status END,
+                    cover_check_details=CASE WHEN $2 THEN '' ELSE cover_check_details END,
+                    media_checked_at=NULL
+                 WHERE id=$3`,
+                [body.file_path !== undefined, body.cover_path !== undefined, seg[1]]
+            );
+        }
+        if (body.title !== undefined || body.artist !== undefined) {
+            await query('DELETE FROM song_index_checks WHERE song_id=$1', [seg[1]]);
+        }
+        clearQueryCache();
         if (!editedSong.rows[0].approved) {
             await query('DELETE FROM song_review_listens WHERE song_id=$1', [seg[1]]);
         }
@@ -3063,15 +3261,48 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── ADMIN STATS / ANALYTICS ────────────────────────────
     if (method === 'GET' && pathname === '/api/admin/stats') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const [songs, users, premium, plays, downloads, pending, comments, verifications] = await Promise.all([
+        const [songs, users, premium, plays, downloads, pending, comments, verifications, reviewSummary, recentDecisions] = await Promise.all([
             query('SELECT COUNT(*) FROM songs WHERE approved=TRUE'),
             query('SELECT COUNT(*) FROM users'),
             query('SELECT COUNT(*) FROM users WHERE is_premium=TRUE'),
             query('SELECT COALESCE(SUM(play_count),0) FROM songs WHERE approved=TRUE'),
             query('SELECT COALESCE(SUM(download_count),0) FROM songs WHERE approved=TRUE'),
-            query('SELECT COUNT(*) FROM songs WHERE approved=FALSE'),
+            query(`SELECT COUNT(*) FROM songs WHERE approved=FALSE AND review_status IN ('pending','changes_requested')`),
             query('SELECT COUNT(*) FROM comments'),
-            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'")
+            query("SELECT COUNT(*) FROM verification_requests WHERE status='pending'"),
+            query(`
+                WITH first_reviews AS (
+                    SELECT entity_id, MIN(created_at) AS reviewed_at
+                    FROM admin_activity
+                    WHERE entity_type='song'
+                      AND action IN ('approve_song','reject_song','request_song_changes')
+                    GROUP BY entity_id
+                )
+                SELECT
+                    COUNT(*) FILTER (WHERE s.approved=FALSE AND s.review_status IN ('pending','changes_requested'))::int AS pending,
+                    COUNT(*) FILTER (
+                        WHERE (s.approved=FALSE AND (
+                            s.review_status='changes_requested'
+                            OR (s.review_status='pending' AND s.created_at < NOW() - INTERVAL '7 days')
+                        ))
+                        OR s.audio_check_status IN ('broken','missing')
+                        OR s.cover_check_status IN ('broken','missing')
+                    )::int AS needs_attention,
+                    ROUND(AVG(EXTRACT(EPOCH FROM (fr.reviewed_at-s.created_at))/3600)::numeric, 1) AS average_review_hours
+                FROM songs s
+                LEFT JOIN first_reviews fr ON fr.entity_id=s.id
+            `),
+            query(`
+                SELECT aa.action, aa.details, aa.created_at, aa.entity_id AS song_id,
+                       s.title, s.artist, reviewer.username AS admin_username
+                FROM admin_activity aa
+                LEFT JOIN songs s ON s.id=aa.entity_id
+                LEFT JOIN users reviewer ON reviewer.id=aa.admin_user_id
+                WHERE aa.entity_type='song'
+                  AND aa.action IN ('approve_song','reject_song','request_song_changes')
+                ORDER BY aa.created_at DESC
+                LIMIT 8
+            `)
         ]);
         return J(200, {
             songs: parseInt(songs.rows[0].count),
@@ -3082,8 +3313,197 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             pending: parseInt(pending.rows[0].count),
             comments: parseInt(comments.rows[0].count),
             verifications: parseInt(verifications.rows[0].count),
-            revenue: parseInt(premium.rows[0].count) * 10000
+            revenue: parseInt(premium.rows[0].count) * 10000,
+            reviewSummary: {
+                pending: Number(reviewSummary.rows[0].pending),
+                needsAttention: Number(reviewSummary.rows[0].needs_attention),
+                averageReviewHours: reviewSummary.rows[0].average_review_hours === null
+                    ? null : Number(reviewSummary.rows[0].average_review_hours),
+                recentDecisions: recentDecisions.rows
+            }
         });
+    }
+    if (method === 'GET' && pathname === '/api/admin/media-health') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const offset = Number(q.get('offset') || 0);
+        if (!Number.isSafeInteger(offset) || offset < 0) return J(400, { error:'offset must be a non-negative integer' });
+        const [songs, totals] = await Promise.all([
+            query(`
+                SELECT id,title,artist,file_path,cover_path,approved,review_status,
+                       audio_check_status,audio_check_details,cover_check_status,
+                       cover_check_details,media_checked_at,created_at
+                FROM songs
+                ORDER BY id DESC
+                LIMIT 100 OFFSET $1
+            `, [offset]),
+            query(`
+                SELECT
+                    COUNT(*)::int AS total_songs,
+                    COUNT(*) FILTER (WHERE audio_check_status IN ('broken','missing'))::int AS broken_audio,
+                    COUNT(*) FILTER (WHERE cover_check_status IN ('broken','missing'))::int AS broken_covers,
+                    COUNT(*) FILTER (WHERE audio_check_status='unchecked' OR cover_check_status='unchecked')::int AS unchecked
+                FROM songs
+            `)
+        ]);
+        return J(200, {
+            songs: songs.rows,
+            totals: totals.rows[0],
+            offset,
+            hasMore: offset + songs.rows.length < Number(totals.rows[0].total_songs)
+        });
+    }
+    if (method === 'POST' && pathname === '/api/admin/media-check') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const body = await parseJSON(req);
+        if (!Array.isArray(body.ids) || !body.ids.length || body.ids.length > 50) {
+            return J(400, { error:'Provide between 1 and 50 song IDs to check' });
+        }
+        const ids = [...new Set(body.ids.map(Number))];
+        if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+            return J(400, { error:'Song IDs must be positive integers' });
+        }
+        const songs = await query(
+            `SELECT id,title,artist,file_path,COALESCE(NULLIF(cover_path,''),cover_image,'') AS cover_path
+             FROM songs WHERE id=ANY($1::int[])`,
+            [ids]
+        );
+        const results = new Array(songs.rows.length);
+        let nextIndex = 0;
+        const worker = async () => {
+            while (nextIndex < songs.rows.length) {
+                const index = nextIndex++;
+                const song = songs.rows[index];
+                const [audio, cover] = await Promise.all([
+                    checkSongMediaUrl(song.file_path, 'audio'),
+                    checkSongMediaUrl(song.cover_path, 'image')
+                ]);
+                const checkedAt = new Date();
+                await query(
+                    `UPDATE songs
+                     SET audio_check_status=$1,audio_check_details=$2,
+                         cover_check_status=$3,cover_check_details=$4,media_checked_at=$5
+                     WHERE id=$6`,
+                    [audio.status, audio.details, cover.status, cover.details, checkedAt, song.id]
+                );
+                results[index] = {
+                    id: song.id,
+                    title: song.title,
+                    artist: song.artist,
+                    audio_check_status: audio.status,
+                    audio_check_details: audio.details,
+                    cover_check_status: cover.status,
+                    cover_check_details: cover.details,
+                    media_checked_at: checkedAt
+                };
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(5, songs.rows.length) }, worker));
+        return J(200, { checked: results.length, results });
+    }
+    if (method === 'GET' && pathname === '/api/admin/indexing') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const [songs, totals] = await Promise.all([
+            query(`
+                SELECT s.id,s.title,s.artist,s.created_at,
+                       ic.inspected_url,ic.verdict,ic.coverage_state,ic.indexing_state,
+                       ic.page_fetch_state,ic.robots_txt_state,ic.google_canonical,
+                       ic.user_canonical,ic.last_crawl_time,ic.sitemaps,ic.error,ic.checked_at
+                FROM songs s
+                LEFT JOIN song_index_checks ic ON ic.song_id=s.id
+                WHERE s.approved=TRUE
+                ORDER BY ic.checked_at ASC NULLS FIRST,s.created_at DESC
+                LIMIT 100
+            `),
+            query(`
+                SELECT
+                    COUNT(*)::int AS approved,
+                    COUNT(*) FILTER (WHERE ic.song_id IS NULL)::int AS unchecked,
+                    COUNT(*) FILTER (WHERE ic.verdict='PASS')::int AS indexed,
+                    COUNT(*) FILTER (
+                        WHERE ic.error='' AND (
+                            ic.verdict='FAIL'
+                            OR ic.indexing_state='INDEXING_NOT_ALLOWED'
+                            OR LOWER(ic.coverage_state) LIKE '%not indexed%'
+                            OR LOWER(ic.coverage_state) LIKE '%not on google%'
+                        )
+                    )::int AS not_indexed,
+                    COUNT(*) FILTER (WHERE ic.error<>'')::int AS errors
+                FROM songs s
+                LEFT JOIN song_index_checks ic ON ic.song_id=s.id
+                WHERE s.approved=TRUE
+            `)
+        ]);
+        return J(200, {
+            configured: googleSearchConsoleConfigured(),
+            property: process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || 'sc-domain:djmusta.com',
+            songs: songs.rows.map(song => ({ ...song, canonical_url: songCanonicalUrl(song) })),
+            totals: totals.rows[0]
+        });
+    }
+    if (method === 'POST' && pathname === '/api/admin/indexing/inspect') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        if (!googleSearchConsoleConfigured()) {
+            return J(503, { error:'Configure the Google Search Console service-account email and private key before running index inspections.' });
+        }
+        const body = await parseJSON(req);
+        if (!Array.isArray(body.ids) || !body.ids.length || body.ids.length > 10) {
+            return J(400, { error:'Inspect between 1 and 10 approved song URLs per request' });
+        }
+        const ids = [...new Set(body.ids.map(Number))];
+        if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+            return J(400, { error:'Song IDs must be positive integers' });
+        }
+        try {
+            await getGoogleInspectionToken();
+        } catch (error) {
+            console.error('[Google Index Inspection] Authorization failed:', error.message);
+            return J(502, { error: error.message });
+        }
+        const songs = await query(
+            'SELECT id,title,artist FROM songs WHERE approved=TRUE AND id=ANY($1::int[])',
+            [ids]
+        );
+        const results = [];
+        for (const song of songs.rows) {
+            const inspectedUrl = songCanonicalUrl(song);
+            try {
+                const inspection = await inspectGoogleIndex(inspectedUrl);
+                await query(
+                    `INSERT INTO song_index_checks
+                        (song_id,inspected_url,verdict,coverage_state,indexing_state,page_fetch_state,
+                         robots_txt_state,google_canonical,user_canonical,last_crawl_time,sitemaps,error,checked_at)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,'',NOW())
+                     ON CONFLICT (song_id) DO UPDATE SET
+                        inspected_url=EXCLUDED.inspected_url,verdict=EXCLUDED.verdict,
+                        coverage_state=EXCLUDED.coverage_state,indexing_state=EXCLUDED.indexing_state,
+                        page_fetch_state=EXCLUDED.page_fetch_state,robots_txt_state=EXCLUDED.robots_txt_state,
+                        google_canonical=EXCLUDED.google_canonical,user_canonical=EXCLUDED.user_canonical,
+                        last_crawl_time=EXCLUDED.last_crawl_time,sitemaps=EXCLUDED.sitemaps,
+                        error='',checked_at=NOW()`,
+                    [
+                        song.id, inspectedUrl, inspection.verdict, inspection.coverageState,
+                        inspection.indexingState, inspection.pageFetchState, inspection.robotsTxtState,
+                        inspection.googleCanonical, inspection.userCanonical, inspection.lastCrawlTime,
+                        JSON.stringify(inspection.sitemaps)
+                    ]
+                );
+                results.push({ id: song.id, title: song.title, artist: song.artist, inspected_url: inspectedUrl, ...inspection });
+            } catch (error) {
+                const errorMessage = String(error.message || 'Google index inspection failed').slice(0, 1000);
+                await query(
+                    `INSERT INTO song_index_checks (song_id,inspected_url,verdict,error,checked_at)
+                     VALUES ($1,$2,'ERROR',$3,NOW())
+                     ON CONFLICT (song_id) DO UPDATE SET
+                        inspected_url=EXCLUDED.inspected_url,verdict='ERROR',
+                        coverage_state='',indexing_state='',page_fetch_state='',robots_txt_state='',
+                        google_canonical='',user_canonical='',last_crawl_time=NULL,
+                        sitemaps='[]'::jsonb,error=EXCLUDED.error,checked_at=NOW()`,
+                    [song.id, inspectedUrl, errorMessage]
+                );
+                results.push({ id: song.id, title: song.title, artist: song.artist, inspected_url: inspectedUrl, verdict: 'ERROR', error: errorMessage });
+            }
+        }
+        return J(200, { checked: results.length, results });
     }
     if (method === 'GET' && pathname === '/api/admin/analytics') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
@@ -3128,7 +3548,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     if (method === 'GET' && pathname === '/api/artist/stats') {
         if (!user) return J(401, { error:'Login required' });
         const r = await query(`
-            SELECT s.id, s.title, s.artist, s.cover_path, s.play_count, s.download_count, s.like_count, s.created_at, s.approved
+            SELECT s.id, s.title, s.artist, s.cover_path, s.play_count, s.download_count, s.like_count,
+                   s.created_at, s.approved, s.review_status, s.review_notes
             FROM songs s WHERE s.uploaded_by=$1 ORDER BY s.play_count DESC
         `, [user.id]);
         const daily = await query(`
@@ -3167,7 +3588,11 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             let coverPath;
             try { coverPath = await r2Upload(cover, 'covers'); }
             catch(e) { coverPath = saveLocal(cover, 'covers'); }
-            await query('UPDATE songs SET cover_path=$1 WHERE id=$2', [coverPath, seg[1]]);
+            await query(
+                `UPDATE songs SET cover_path=$1,cover_check_status='unchecked',
+                    cover_check_details='',media_checked_at=NULL WHERE id=$2`,
+                [coverPath, seg[1]]
+            );
             return J(200, { success:true, coverPath });
         } catch(err) {
             return J(500, { error:'Cover update failed: ' + err.message });
