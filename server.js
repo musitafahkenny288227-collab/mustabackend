@@ -1912,10 +1912,18 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const results = [];
         const errors = [];
 
-        const titles = fields.titles?.split(',').map(t => t.trim()).filter(Boolean) || [];
-        const artists = fields.artists?.split(',').map(a => a.trim()).filter(Boolean) || [];
-        const genres = fields.genres?.split(',').map(g => g.trim()).filter(Boolean) || [];
-        const durations = fields.durations?.split(',').map(d => d.trim()).filter(Boolean) || [];
+        const parseBulkValues = value => {
+            if (!value) return [];
+            try {
+                const parsed = JSON.parse(value);
+                if (Array.isArray(parsed)) return parsed.map(item => String(item ?? '').trim());
+            } catch {}
+            return value.split(',').map(item => item.trim()).filter(Boolean);
+        };
+        const titles = parseBulkValues(fields.titles);
+        const artists = parseBulkValues(fields.artists);
+        const genres = parseBulkValues(fields.genres);
+        const durations = parseBulkValues(fields.durations);
 
         const songFiles = Object.keys(files)
             .filter(key => key.startsWith('song'))
@@ -1928,7 +1936,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             .map(key => files[key]);
 
         if (songFiles.length === 0) return J(400, { error: 'No song files provided' });
-        const releaseDates = (fields.release_dates || '').split(',').map(normalizeReleaseDate);
+        const releaseDates = parseBulkValues(fields.release_dates).map(normalizeReleaseDate);
         if (releaseDates.length !== songFiles.length || releaseDates.some(date => !date)) {
             return J(400, { error: 'Provide one valid YYYY/MM/DD release date for each song file' });
         }
