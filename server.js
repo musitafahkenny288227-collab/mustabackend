@@ -71,13 +71,14 @@ const SITE_URL   = process.env.SITE_URL   || 'https://djmusta.com';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
-async function sendEmail(to, subject, html) {
+async function sendEmail(to, subject, html, replyTo = null) {
     return new Promise((resolve) => {
         const body = JSON.stringify({
             sender: { name: 'DJ Musta Music', email: EMAIL_USER },
             to: [{ email: to }],
             subject,
-            htmlContent: html
+            htmlContent: html,
+            ...(replyTo ? { replyTo } : {})
         });
         const req = https.request({
             hostname: 'api.brevo.com',
@@ -669,6 +670,8 @@ async function initDB() {
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS sponsor_name TEXT DEFAULT ''`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS cover_image TEXT`);
     await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS video_url TEXT DEFAULT ''`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS artist_background TEXT DEFAULT ''`);
+    await query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS tracklist TEXT DEFAULT ''`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMPTZ`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE`);
@@ -1219,6 +1222,68 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     // ── HEALTH ─────────────────────────────────────────────
     if (pathname === '/api/health') return JC(200, { status:'ok', uptime: process.uptime() }, 10);
+
+    // ── PUBLIC CONTACT FORM ────────────────────────────────
+    if (method === 'POST' && pathname === '/api/contact') {
+        if (rateLimit(ip + ':contact', 5, 60000)) {
+            return J(429, { error:'Too many messages. Please wait a minute and try again.' });
+        }
+        if (!BREVO_API_KEY) {
+            return J(503, { error:'The contact form is temporarily unavailable. Please email us directly.' });
+        }
+
+        try {
+            const parsedPayload = await parseJSON(req);
+            const payload = parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)
+                ? parsedPayload
+                : {};
+            const readField = field => typeof payload[field] === 'string' ? payload[field].trim() : '';
+            const name = readField('name');
+            const email = readField('email').toLowerCase();
+            const subject = readField('subject').replace(/[\r\n]+/g, ' ');
+            const message = readField('message');
+            const website = readField('website');
+
+            if (website) return J(400, { error:'Please complete the form without filling hidden fields.' });
+            if (!name || !email || !subject || !message) {
+                return J(400, { error:'Name, email, subject, and message are required.' });
+            }
+            if (name.length > 100 || email.length > 254 || subject.length > 160 || message.length > 5000) {
+                return J(400, { error:'One or more fields exceed the allowed length.' });
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return J(400, { error:'Enter a valid email address.' });
+            }
+            if (message.length < 10) {
+                return J(400, { error:'Please include a little more detail in your message.' });
+            }
+
+            const esc = value => String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const html = `
+                <h2>New message from the DJ Musta contact form</h2>
+                <p><strong>Name:</strong> ${esc(name)}</p>
+                <p><strong>Email:</strong> ${esc(email)}</p>
+                <p><strong>Subject:</strong> ${esc(subject)}</p>
+                <p><strong>Message:</strong></p>
+                <p>${esc(message).replace(/\n/g, '<br>')}</p>`;
+            const sent = await sendEmail(EMAIL_USER, `[DJ Musta Contact] ${subject}`, html, {
+                email,
+                name
+            });
+            if (!sent) {
+                return J(502, { error:'We could not send your message right now. Please try again or email us directly.' });
+            }
+            return J(200, { message:'Thanks for contacting DJ Musta. Your message has been sent.' });
+        } catch (error) {
+            console.error('[Contact] Submission failed:', error);
+            return J(500, { error:'We could not process your message. Please try again.' });
+        }
+    }
 
     // ── AUTH ───────────────────────────────────────────────
     if (method === 'POST' && pathname === '/api/auth/register') {
@@ -1789,20 +1854,23 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     // ── ADMIN QUICK-ADD (✅ FIX #26: validate URL) ──────────
     if (method === 'POST' && pathname === '/api/songs/admin/add') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const { title, artist, genre, duration, file_path, cover_path, lyrics, description, release_date, album } = await parseJSON(req);
+        const { title, artist, genre, duration, file_path, cover_path, lyrics, description, artist_background, tracklist, release_date, album } = await parseJSON(req);
         if (!title || !artist) return J(400, { error:'title and artist are required' });
         if (!file_path) return J(400, { error:'file_path (audio URL) is required' });
         if (!/^https?:\/\//i.test(file_path)) return J(400, { error:'file_path must be an http(s) URL' });
         if (cover_path && !/^https?:\/\//i.test(cover_path)) return J(400, { error:'cover_path must be an http(s) URL' });
+        if ([description, artist_background, tracklist].some(value => typeof value === 'string' && value.length > 20000)) {
+            return J(400, { error:'Editorial fields must be 20,000 characters or fewer.' });
+        }
         const releaseDate = normalizeReleaseDate(release_date, true);
         if (!releaseDate) return J(400, { error:'release_date must be a valid YYYY/MM/DD date' });
         const yr = Number(releaseDate.slice(0, 4));
         const albumName = (album || '').trim();
         const r = await query(
-            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, description, album, release_year, release_date, approved, uploaded_by, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,TRUE,$12,NOW()) RETURNING *`,
+            `INSERT INTO songs (title, artist, genre, duration, file_path, cover_path, lyrics, description, artist_background, tracklist, album, release_year, release_date, approved, uploaded_by, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14,NOW()) RETURNING *`,
             [title.trim(), artist.trim(), genre||'Other', duration||'0:00',
-             file_path.trim(), cover_path||null, lyrics||'', description||'', albumName || null, yr, releaseDate, user.id]
+             file_path.trim(), cover_path||null, lyrics||'', description||'', artist_background||'', tracklist||'', albumName || null, yr, releaseDate, user.id]
         );
         clearQueryCache();
         pingSearchEngines().catch(() => {});
@@ -1862,7 +1930,12 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         const { title, artist, genre, duration, lyrics } = fields;
         const album = (fields.album || '').trim();
         const description = (fields.description || '').trim();
+        const artistBackground = (fields.artist_background || '').trim();
+        const tracklist = (fields.tracklist || '').trim();
         const producer    = (fields.producer || '').trim();
+        if ([description, artistBackground, tracklist].some(value => value.length > 20000)) {
+            return J(400, { error:'Editorial fields must be 20,000 characters or fewer.' });
+        }
         const releaseDate = normalizeReleaseDate(fields.release_date, true);
         if (!releaseDate) return J(400, { error:'A valid release_date in YYYY/MM/DD format is required' });
         const releaseYear = Number(releaseDate.slice(0, 4));
@@ -1888,8 +1961,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
 
         const r = await query(
-            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,album,release_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *',
-            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, filePath, files.song.data.length, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null, releaseDate]
+            'INSERT INTO songs (title,artist,genre,duration,lyrics,description,artist_background,tracklist,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,album,release_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *',
+            [title.trim(), artist.trim(), genre||'Other', duration||'3:00', lyrics||'', description, artistBackground, tracklist, filePath, files.song.data.length, coverPath, user.id, !!user.isAdmin, producer||null, releaseYear, album || null, releaseDate]
         );
         
         // Clear cache when new song added
@@ -2076,12 +2149,15 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     if (method === 'PATCH' && seg[0]==='songs' && seg[1] && !seg[2]) {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const body = await parseJSON(req);
+        if ([body.description, body.artist_background, body.tracklist].some(value => typeof value === 'string' && value.length > 20000)) {
+            return J(400, { error:'Editorial fields must be 20000 characters or fewer' });
+        }
         if (body.release_date !== undefined) {
             body.release_date = normalizeReleaseDate(body.release_date);
             if (!body.release_date) return J(400, { error:'release_date must be a valid YYYY/MM/DD date' });
             body.release_year = Number(body.release_date.slice(0, 4));
         }
-        const allowed = ['title','artist','genre','duration','lyrics','description','release_year','release_date','album',
+        const allowed = ['title','artist','genre','duration','lyrics','description','artist_background','tracklist','release_year','release_date','album',
                          'is_featured','is_song_of_day','sponsored_until','sponsor_name','producer','video_url'];
         const sets = []; const vals = [];
         for (const key of allowed) {
@@ -2099,6 +2175,7 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
         vals.push(seg[1]);
         await query('UPDATE songs SET '+sets.join(', ')+' WHERE id=$'+vals.length, vals);
+        clearQueryCache();
         await logAdminAction(user.id, 'edit_song', `Updated song metadata`, 'song', seg[1]);
         return J(200, { success:true });
     }
@@ -2870,6 +2947,38 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
     }
 
     // ── ADMIN STATS / ANALYTICS ────────────────────────────
+    if (method === 'GET' && pathname === '/api/admin/editorial-queue') {
+        if (!user?.isAdmin) return J(403, { error:'Admin only' });
+        const result = await query(`
+            SELECT id, title, artist, genre, play_count, editorial_word_count, has_tracklist
+            FROM (
+                SELECT s.id, s.title, s.artist, s.genre, s.play_count,
+                    (
+                        SELECT COUNT(*)::int
+                        FROM regexp_split_to_table(
+                            COALESCE(s.description, '') || ' ' || COALESCE(s.artist_background, ''),
+                            '[[:space:]]+'
+                        ) AS editorial_words(word)
+                        WHERE editorial_words.word <> ''
+                    ) AS editorial_word_count,
+                    EXISTS (
+                        SELECT 1
+                        FROM regexp_split_to_table(COALESCE(s.tracklist, ''), '[[:space:]]+') AS track_words(word)
+                        WHERE track_words.word <> ''
+                    ) AS has_tracklist
+                FROM songs s
+                WHERE s.approved=TRUE
+            ) AS editorial
+            WHERE editorial_word_count < 300
+            ORDER BY play_count DESC, id DESC
+        `);
+        return J(200, {
+            songs: result.rows,
+            total: result.rows.length,
+            wordThreshold: 300
+        });
+    }
+
     if (method === 'GET' && pathname === '/api/admin/stats') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
         const [songs, users, premium, plays, downloads, pending, comments, verifications] = await Promise.all([
@@ -3416,8 +3525,13 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
         const { title, artist, genre, duration, lyrics, video_url } = fields;
         const description = (fields.description || '').trim();
+        const artistBackground = (fields.artist_background || '').trim();
+        const tracklist = (fields.tracklist || '').trim();
         const album = (fields.album || '').trim();
         const producer    = (fields.producer || '').trim();
+        if ([description, artistBackground, tracklist].some(value => value.length > 20000)) {
+            return J(400, { error: 'Editorial fields must be 20,000 characters or fewer.' });
+        }
         const releaseDate = normalizeReleaseDate(fields.release_date, true);
         if (!releaseDate) return J(400, { error: 'A valid release_date in YYYY/MM/DD format is required' });
         const releaseYear = Number(releaseDate.slice(0, 4));
@@ -3450,10 +3564,10 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
 
         const r = await query(
-            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,video_url,album,release_date)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11,$12,$13,$14,$15) RETURNING id,title,artist`,
+            `INSERT INTO songs (title,artist,genre,duration,lyrics,description,artist_background,tracklist,file_path,file_size,cover_path,uploaded_by,approved,producer,release_year,video_url,album,release_date)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,FALSE,$13,$14,$15,$16,$17) RETURNING id,title,artist`,
             [title.trim(), artist.trim(), genre||'Other', duration||'3:00',
-             lyrics||'', description, filePath, songFile.data.length, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null, releaseDate]
+             lyrics||'', description, artistBackground, tracklist, filePath, songFile.data.length, coverPath, user.id, producer||null, releaseYear, cleanVideoUrl, album || null, releaseDate]
         );
         const newSong = r.rows[0];
         await query('INSERT INTO notifications (user_id,type,title,message) VALUES (1,$1,$2,$3)',
