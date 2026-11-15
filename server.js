@@ -1716,7 +1716,45 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
         }
     }
 
-    // ── GET SONGS (✅ PERFORMANCE OPTIMIZED) ──
+    // ── SITEMAP SONGS (INDEXABLE EDITORIAL CONTENT) ──
+    if (method === 'GET' && pathname === '/api/sitemap/songs') {
+        const parsedLimit = parseInt(q.get('limit') || '100', 10);
+        const parsedOffset = parseInt(q.get('offset') || '0', 10);
+        const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 100;
+        const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+        const approvedSongs = `
+            SELECT s.id, s.title, s.artist, s.genre, s.release_year, s.cover_image,
+                   s.cover_path, s.created_at,
+                   (
+                       SELECT COUNT(*)::int
+                       FROM regexp_split_to_table(
+                           COALESCE(s.description, '') || ' ' || COALESCE(s.artist_background, ''),
+                           '[[:space:]]+'
+                       ) AS editorial_words(word)
+                       WHERE editorial_words.word <> ''
+                   ) AS editorial_word_count
+            FROM songs s
+            WHERE s.approved=TRUE
+        `;
+        const [countResult, songsResult] = await Promise.all([
+            queryCached(
+                `SELECT COUNT(*) FROM (${approvedSongs}) AS songs WHERE editorial_word_count >= 300`
+            ),
+            queryCached(
+                `SELECT * FROM (${approvedSongs}) AS songs
+                 WHERE editorial_word_count >= 300
+                 ORDER BY created_at DESC, id DESC
+                 LIMIT $1 OFFSET $2`,
+                [limit, offset]
+            )
+        ]);
+        return JC(200, {
+            songs: songsResult.rows,
+            total: parseInt(countResult.rows[0].count, 10),
+            offset,
+            limit
+        }, 120);
+    }
     if (method === 'GET' && pathname === '/api/songs') {
         const category = q.get('category') || 'all';
         const search   = q.get('search') || '';
