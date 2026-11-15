@@ -1,0 +1,3 @@
+ALTER TABLE songs
+    ADD COLUMN IF NOT EXISTS artist_background TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS tracklist TEXT DEFAULT '';
