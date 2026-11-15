@@ -189,13 +189,13 @@ Rules:
 
 Song record:
 ${JSON.stringify(songFacts, null, 2)}`;
-    const metadataOnlyPrompt = `Create an unpublished editorial draft for DJ Musta using only the facts explicitly present in this song record.
+    const metadataOnlyPrompt = `Create an unpublished editorial draft for DJ Musta without web search, using the supplied song record for all song- and artist-specific claims.
 
 Rules:
-- Do not use web search, outside knowledge, or assumptions. Do not claim that you listened to the recording or describe sounds, lyrics, mood, instruments, or song structure.
+- Do not use web search or assumptions. Do not claim that you listened to the recording or describe sounds, lyrics, mood, instruments, or song structure.
 - Do not invent biography, credits, release details, awards, popularity, track names, or other facts. If there is not enough information, return a short, factual draft and say in review_notes which details an editor should verify or add.
 - Do not reproduce lyrics or copy wording from any source.
-- Artist and genre background must come only from the supplied artist_background_notes and genre fields. Do not expand them with outside facts.
+- Do not make artist-specific background claims unless they appear in artist_background_notes. When that field is empty, you may add a concise, clearly general overview of the supplied genre using stable knowledge; do not imply that genre history describes this artist or this song. If uncertain, leave artist_background empty.
 - Tracklist: preserve and organize only names already present in supplied_tracklist. If no tracklist is supplied, return an empty string.
 - Keep each field plain text with paragraph breaks. Do not pad the draft to reach a word count. Return valid JSON matching the requested schema.
 
@@ -284,7 +284,7 @@ ${JSON.stringify(songFacts, null, 2)}`;
     draft.sources = sources;
     draft.fallback_used = fallbackUsed;
     if (fallbackUsed) {
-        draft.review_notes = `${draft.review_notes} Google Search was unavailable due to a quota or rate limit, so this fallback uses only the supplied catalog/admin facts and has no web citations. Verify all details before publishing.`.trim();
+        draft.review_notes = `${draft.review_notes} Google Search was unavailable due to a quota or rate limit. Song- and artist-specific claims use supplied catalog/admin facts; any genre overview may be uncited general knowledge. No web citations are included, so verify all details before publishing.`.trim();
     } else if (!sources.length) {
         draft.review_notes = `${draft.review_notes} Google Search returned no source citations; verify factual claims independently.`.trim();
     }
@@ -3193,10 +3193,18 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
 
     if (method === 'GET' && pathname === '/api/admin/editorial-queue') {
         if (!user?.isAdmin) return J(403, { error:'Admin only' });
-        const result = await query(`
-            SELECT id, title, artist, genre, play_count, editorial_word_count, has_tracklist
-            FROM (
-                SELECT s.id, s.title, s.artist, s.genre, s.play_count,
+        const qualityCte = `
+            WITH approved AS (
+                SELECT s.id, s.title, s.artist, s.genre, COALESCE(s.play_count, 0) AS play_count,
+                    COALESCE(s.description, '') AS description,
+                    COALESCE(s.artist_background, '') AS artist_background,
+                    NULLIF(BTRIM(COALESCE(s.album, '')), '') IS NOT NULL AS has_album,
+                    NULLIF(BTRIM(COALESCE(s.producer, '')), '') IS NOT NULL AS has_producer,
+                    NULLIF(BTRIM(COALESCE(s.release_date::text, '')), '') IS NOT NULL AS has_release_date,
+                    NULLIF(BTRIM(COALESCE(s.cover_path, '')), '') IS NOT NULL AS has_cover,
+                    NULLIF(BTRIM(COALESCE(s.file_path, '')), '') IS NOT NULL AS has_audio_url,
+                    NULLIF(BTRIM(COALESCE(s.genre, '')), '') IS NOT NULL AS has_genre,
+                    NULLIF(BTRIM(COALESCE(s.artist_background, '')), '') IS NOT NULL AS has_artist_background,
                     (
                         SELECT COUNT(*)::int
                         FROM regexp_split_to_table(
@@ -3204,21 +3212,68 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
                             '[[:space:]]+'
                         ) AS editorial_words(word)
                         WHERE editorial_words.word <> ''
-                    ) AS editorial_word_count,
-                    EXISTS (
-                        SELECT 1
-                        FROM regexp_split_to_table(COALESCE(s.tracklist, ''), '[[:space:]]+') AS track_words(word)
-                        WHERE track_words.word <> ''
-                    ) AS has_tracklist
+                    ) AS editorial_word_count
                 FROM songs s
                 WHERE s.approved=TRUE
-            ) AS editorial
-            WHERE editorial_word_count < 300
-            ORDER BY play_count DESC, id DESC
-        `);
+            ),
+            description_stats AS (
+                SELECT approved.*,
+                    CASE WHEN BTRIM(description) = '' THEN FALSE
+                         ELSE COUNT(*) OVER (
+                             PARTITION BY NULLIF(LOWER(REGEXP_REPLACE(BTRIM(description), '[[:space:]]+', ' ', 'g')), '')
+                         ) > 1
+                    END AS duplicate_description
+                FROM approved
+            ),
+            quality AS (
+                SELECT description_stats.*,
+                    editorial_word_count < 300 AS short_editorial,
+                    (
+                        CASE WHEN editorial_word_count < 300 THEN 1 ELSE 0 END +
+                        CASE WHEN duplicate_description THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_artist_background THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_genre THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_release_date THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_album THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_producer THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_cover THEN 1 ELSE 0 END +
+                        CASE WHEN NOT has_audio_url THEN 1 ELSE 0 END
+                    ) AS issue_count
+                FROM description_stats
+            )
+        `;
+        const [summary, result] = await Promise.all([
+            query(`${qualityCte}
+                SELECT COUNT(*)::int AS approved_total,
+                    COUNT(*) FILTER (WHERE issue_count > 0)::int AS flagged_total,
+                    COUNT(*) FILTER (WHERE short_editorial)::int AS short_editorial,
+                    COUNT(*) FILTER (WHERE duplicate_description)::int AS duplicate_descriptions,
+                    COUNT(*) FILTER (WHERE NOT has_cover OR NOT has_audio_url)::int AS missing_media,
+                    COUNT(*) FILTER (WHERE NOT has_artist_background OR NOT has_genre OR NOT has_release_date OR NOT has_album OR NOT has_producer)::int AS metadata_gaps
+                FROM quality
+            `),
+            query(`${qualityCte}
+                SELECT id, title, artist, genre, play_count, editorial_word_count, short_editorial,
+                    duplicate_description, has_artist_background, has_genre, has_release_date,
+                    has_album, has_producer, has_cover, has_audio_url, issue_count
+                FROM quality
+                WHERE issue_count > 0
+                ORDER BY issue_count DESC, play_count DESC, id DESC
+                LIMIT 500
+            `)
+        ]);
+        const counts = summary.rows[0];
         return J(200, {
             songs: result.rows,
-            total: result.rows.length,
+            total: Number(counts.flagged_total),
+            approvedTotal: Number(counts.approved_total),
+            summary: {
+                shortEditorial: Number(counts.short_editorial),
+                duplicateDescriptions: Number(counts.duplicate_descriptions),
+                missingMedia: Number(counts.missing_media),
+                metadataGaps: Number(counts.metadata_gaps)
+            },
+            truncated: Number(counts.flagged_total) > result.rows.length,
             wordThreshold: 300
         });
     }
