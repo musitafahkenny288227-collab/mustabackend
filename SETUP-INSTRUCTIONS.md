@@ -31,7 +31,11 @@ Make sure these are set in your `.env` or Render environment:
 ```
 JWT_SECRET=your-secret-key-here-at-least-32-characters-long
 DATABASE_URL=your-supabase-connection-string
+GEMINI_API_KEY=your-google-ai-studio-api-key
+GEMINI_MODEL=gemini-4-hydrogen
 ```
+
+`GEMINI_API_KEY` is required for the admin-only Gemini editorial-draft button. Add it as a secret in the backend hosting environment; never put the key in frontend code. Draft generation uses Google Search grounding and displays the returned citation links for editor review; Search grounding is subject to Google's account quotas and usage terms. Generated text stays in the admin form until an editor reviews it and saves changes. Tracklists are not invented when no tracklist is supplied.
 
 ## Test the API
 
