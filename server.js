@@ -198,7 +198,19 @@ ${JSON.stringify(songFacts, null, 2)}`;
         throw error;
     }
     if (!response.ok) {
-        console.error(`[Gemini] Draft request failed with HTTP ${response.status}.`);
+        const providerMessage = typeof result?.error?.message === 'string'
+            ? result.error.message.replace(/[\r\n]+/g, ' ').slice(0, 500)
+            : '';
+        const retryAfter = response.headers.get('retry-after');
+        if (response.status === 429) {
+            console.error('[Gemini] Draft request rate-limited:', providerMessage || 'No provider details.');
+            const guidance = 'Check the limits for the Google AI Studio project used by GEMINI_API_KEY at https://aistudio.google.com/rate-limit, including model and Google Search grounding quotas. Wait and retry if this is a temporary rate limit; enable billing or request a higher tier if the project quota is exhausted.';
+            const details = [providerMessage, retryAfter ? `Retry-After: ${retryAfter}.` : '', guidance].filter(Boolean).join(' ');
+            const error = new Error(`Gemini rate limit or quota reached (HTTP 429). ${details}`);
+            error.statusCode = 429;
+            throw error;
+        }
+        console.error(`[Gemini] Draft request failed with HTTP ${response.status}.`, providerMessage);
         const error = new Error(`Gemini draft generation failed (HTTP ${response.status}).`);
         error.statusCode = 502;
         throw error;
