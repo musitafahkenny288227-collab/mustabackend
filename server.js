@@ -1847,7 +1847,8 @@ async function handleAPI(req, res, pathname, method, parsed, ip, origin, acceptE
             `SELECT s.id, s.title, s.artist, s.genre, s.duration, s.file_path, s.file_size,
                     s.cover_path, s.cover_image, s.uploaded_by, s.play_count, 
                     s.download_count, s.like_count, s.created_at, s.release_year, s.release_date,
-                    s.is_featured, s.is_song_of_day, s.album, s.producer,
+                    s.is_featured, s.is_song_of_day, s.album, s.producer, s.video_url,
+                    (LENGTH(COALESCE(s.lyrics, '')) > 0) AS has_lyrics,
                     COALESCE(vr.status,'none') as uploader_verified
              FROM songs s
              LEFT JOIN verification_requests vr ON vr.user_id=s.uploaded_by AND vr.status='approved'
