@@ -35,7 +35,9 @@ GEMINI_API_KEY=your-google-ai-studio-api-key
 GEMINI_MODEL=gemini-4-hydrogen
 ```
 
-`GEMINI_API_KEY` is required for the admin-only Gemini editorial-draft button. Add it as a secret in the backend hosting environment; never put the key in frontend code. Draft generation uses Google Search grounding and displays the returned citation links for editor review; Search grounding is subject to Google's account quotas and usage terms. Generated text stays in the admin form until an editor reviews it and saves changes. Tracklists are not invented when no tracklist is supplied.
+`GEMINI_API_KEY` is required for the admin-only Gemini editorial-draft button. Add it as a secret in the backend hosting environment; never put the key in frontend code. Draft generation first uses Google Search grounding and displays returned citation links for review. If that request returns HTTP 429, the backend retries with the same Gemini model without web search, using only the supplied catalog/admin facts; the UI labels this metadata-only draft and indicates that it has no citations. Google API model and Search quotas still apply. Generated text stays in the admin form until an editor reviews and saves changes. Tracklists are not invented when no tracklist is supplied.
+
+If both the grounded request and metadata-only retry return HTTP 429, open [Google AI Studio rate limits](https://aistudio.google.com/rate-limit) for the Google Cloud project associated with `GEMINI_API_KEY`. Check the selected model and Google Search grounding limits. Wait and retry for a temporary rate limit; if a project quota is exhausted, enable billing or request a higher usage tier. Redeploy after changing backend configuration.
 
 ## Test the API
 
