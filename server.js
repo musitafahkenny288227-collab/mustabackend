@@ -1167,8 +1167,9 @@ function r2Upload(fileObj, folder) {
         const timeStamp = now.toISOString().replace(/[-:]/g,'').slice(0,15) + 'Z';
         const host = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
         const bodyHash = crypto.createHash('sha256').update(body).digest('hex');
-        const canonicalHeaders = `content-type:${mime}\nhost:${host}\nx-amz-content-sha256:${bodyHash}\nx-amz-date:${timeStamp}\n`;
-        const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+        const cacheControl = 'public, max-age=31536000, immutable';
+        const canonicalHeaders = `cache-control:${cacheControl}\ncontent-type:${mime}\nhost:${host}\nx-amz-content-sha256:${bodyHash}\nx-amz-date:${timeStamp}\n`;
+        const signedHeaders = 'cache-control;content-type;host;x-amz-content-sha256;x-amz-date';
         const canonicalRequest = ['PUT', `/${R2_BUCKET}/${key}`, '', canonicalHeaders, signedHeaders, bodyHash].join('\n');
         const credScope = `${dateStamp}/auto/s3/aws4_request`;
         const strToSign = `AWS4-HMAC-SHA256\n${timeStamp}\n${credScope}\n` + crypto.createHash('sha256').update(canonicalRequest).digest('hex');
@@ -1180,6 +1181,7 @@ function r2Upload(fileObj, folder) {
             hostname: host, path: `/${R2_BUCKET}/${key}`, method: 'PUT',
             headers: {
                 'Content-Type': mime,
+                'Cache-Control': cacheControl,
                 'Content-Length': body.length,
                 'x-amz-date': timeStamp,
                 'x-amz-content-sha256': bodyHash,
